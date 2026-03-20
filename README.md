@@ -1,13 +1,13 @@
 <div align="center">
 
-```
+<pre>
 ██████╗  ██████╗  ██╗ ██╗      ██╗     
 ██╔══██╗ ██╔══██╗ ██║ ██║      ██║     
 ██║  ██║ ██████╔╝ ██║ ██║      ██║     
 ██║  ██║ ██╔══██╗ ██║ ██║      ██║     
 ██████╔╝ ██║  ██║ ██║ ███████╗ ███████╗
 ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝ ╚══════╝
-```
+</pre>
 
 **Pipe any log. Get the root cause.**
 
@@ -15,6 +15,7 @@
 [![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-7C3AED?style=flat-square)](./LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/drill-dev/drill/ci.yml?color=7C3AED&style=flat-square&label=CI)](https://github.com/drill-dev/drill/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-7C3AED?style=flat-square)](https://www.typescriptlang.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-7C3AED?style=flat-square)](https://nodejs.org)
 
 </div>
 
@@ -49,7 +50,7 @@ docker logs my-api 2>&1 | drill
 └───────────────────────────────────────────────────────┘
 ```
 
-Drill does not run its own AI. It uses whatever LLM provider you already have access to — OpenAI, Anthropic, Groq, Mistral, or a local model via Ollama. You bring the key. Drill handles the rest.
+Drill does not run its own AI. It uses whatever LLM provider you already have — OpenAI, Anthropic, Groq, Mistral, or a local model via Ollama. You bring the key. Drill handles the rest.
 
 ---
 
@@ -63,21 +64,20 @@ Requires Node.js 18 or higher. Works on macOS, Linux, and Windows (WSL).
 
 ---
 
-## Setup
+## Quick start
 
 ```bash
+# 1. Configure your LLM provider
 drill setup
-```
 
-Walks you through choosing a provider and entering your API key. Takes about 2 minutes. Groq has a free tier if you don't have an API key yet — [get one here](https://console.groq.com).
-
-Then create your account:
-
-```bash
+# 2. Create your free account
 drill login
+
+# 3. Analyze any log
+docker logs my-api 2>&1 | drill
 ```
 
-Enter your email. Click the magic link. Done. Free tier gives you 100 analyses per week.
+`drill setup` walks you through choosing a provider and entering your API key. Takes 2 minutes. If you don't have an API key, [Groq has a free tier](https://console.groq.com) — no credit card needed.
 
 ---
 
@@ -116,12 +116,13 @@ cat error.log | drill --json | jq .cause
 | Command | Description |
 |---|---|
 | `drill [input]` | Analyze inline log text |
-| `drill login` | Authenticate (magic link, no password) |
-| `drill logout` | Sign out |
-| `drill status` | Show plan, usage, provider |
+| `drill login` | Authenticate via magic link (no password) |
+| `drill logout` | Sign out and clear stored credentials |
+| `drill status` | Show plan, weekly usage, and provider |
 | `drill setup` | Configure LLM provider interactively |
-| `drill config list` | Show all configuration |
-| `drill config set key=value` | Set a configuration value |
+| `drill config list` | Show all configuration values |
+| `drill config get <key>` | Get a single config value |
+| `drill config set <key>=<val>` | Set a config value |
 
 ---
 
@@ -130,64 +131,68 @@ cat error.log | drill --json | jq .cause
 | Flag | Description |
 |---|---|
 | `--no-redact` | Disable PII redaction |
-| `--lines N` | Analyze only last N lines |
+| `--lines <n>` | Analyze only last N lines |
 | `--context <dir>` | Include source code context |
-| `--json` | Output raw JSON result |
+| `--json` | Output raw JSON to stdout |
 | `--ci` | Exit code 1 if cause found |
 | `--watch <file>` | Auto-analyze on error patterns |
 | `--local` | Use local Ollama model |
 | `--model <name>` | Specify local model name |
 | `--verbose` | Show redaction stats and timing |
-| `--timeout N` | Request timeout in seconds |
+| `--timeout <n>` | Request timeout in seconds |
 
 ---
 
 ## Providers
 
-Drill works with any of these. Run `drill setup` to configure.
+Drill works with any of these. Run `drill setup` to configure interactively.
 
-| Provider | Env variable | Recommended model |
-|---|---|---|
-| OpenAI | `OPENAI_API_KEY` | `gpt-4o` |
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` |
-| Groq | `GROQ_API_KEY` | `llama-3.1-70b-versatile` |
-| Mistral | `MISTRAL_API_KEY` | `mistral-large` |
-| MiniMax | `MINIMAX_API_KEY` | `MiniMax-M2.5` |
-| Together AI | `TOGETHER_API_KEY` | `MiniMaxAI/MiniMax-M2.5` |
-| Ollama (local) | none | `qwen2.5-coder:7b` |
-| Custom endpoint | `CUSTOM_API_KEY` | any OpenAI-compatible |
+| Provider | Env variable | Recommended model | Free tier |
+|---|---|---|---|
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` | — |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` | — |
+| Groq | `GROQ_API_KEY` | `llama-3.1-70b-versatile` | ✓ |
+| Mistral | `MISTRAL_API_KEY` | `mistral-large` | — |
+| MiniMax | `MINIMAX_API_KEY` | `MiniMax-M2.5` | — |
+| Together AI | `TOGETHER_API_KEY` | `MiniMaxAI/MiniMax-M2.5` | — |
+| Ollama (local) | none needed | `qwen2.5-coder:7b` | ✓ fully local |
+| Custom endpoint | `CUSTOM_API_KEY` | any OpenAI-compatible | — |
+
+> **No API key?** Groq offers a generous free tier. Sign up at [console.groq.com](https://console.groq.com) in 2 minutes.
 
 ---
 
 ## Privacy
 
-PII redaction runs before any data leaves your machine. 13 pattern categories are stripped from every log before it reaches the LLM:
+PII redaction runs before any data leaves your machine. 13 pattern categories stripped from every log before it reaches the LLM:
 
-emails, IPv4/IPv6 addresses, API keys, Bearer tokens, AWS credentials, JWT tokens, SSH private keys, DSN connection strings, passwords in key=value pairs, UUIDs, Basic auth headers, credit card numbers, phone numbers.
+emails · IPv4/IPv6 addresses · API keys · Bearer tokens · AWS credentials · JWT tokens · SSH private keys · DSN connection strings · passwords in key=value pairs · UUIDs · Basic auth headers · credit card numbers · phone numbers
 
-Use `--no-redact` to disable if your logs contain no sensitive data and you need the raw values in the analysis.
+Use `--no-redact` only if your logs contain no sensitive data.
 
-Log content is never stored. Drill only records your run count and account metadata — never the actual logs.
+Log content is **never stored**. Drill only records your run count and account metadata.
 
 ---
 
 ## Free vs Pro
 
-| | Free | Pro |
+| | Free | Pro *(coming soon)* |
 |---|---|---|
 | Analyses | 100 / week | Unlimited |
-| All providers | Yes | Yes |
-| All models | Yes | Yes |
-| PII redaction | Yes | Yes |
-| `--watch` mode | Yes | Yes |
-| `--context` flag | Yes | Yes |
-| `--ci` flag | Yes | Yes |
-| Result history | — | Yes |
-| Team seats | — | Yes (5) |
-| GitHub Action | — | Yes |
-| Node + Python SDK | — | Yes |
+| All providers (own key) | ✓ | ✓ |
+| All models | ✓ | ✓ |
+| PII redaction | ✓ | ✓ |
+| `--watch` mode | ✓ | ✓ |
+| `--context` flag | ✓ | ✓ |
+| `--ci` flag | ✓ | ✓ |
+| Result history | — | ✓ 30 days |
+| Team seats | — | ✓ 5 seats |
+| GitHub Action | — | ✓ |
+| Node + Python SDK | — | ✓ |
+| Custom system prompt | — | ✓ |
+| Priority support | — | ✓ |
 
-Pro pricing available after early access period.
+> **Pro is coming soon.** Free tier stays free. We'll announce pricing once we reach 500 users.
 
 ---
 
@@ -236,6 +241,12 @@ pnpm install
 # Run tests
 pnpm --filter cli test
 
+# Check coverage
+pnpm --filter cli test:coverage
+
+# Type check
+pnpm typecheck
+
 # Build binary
 pnpm --filter cli build
 
@@ -249,9 +260,14 @@ Requirements: Node.js 18+, pnpm 9+.
 
 ## Contributing
 
-Issues and pull requests welcome. Please read the code of conduct before contributing.
+Issues and pull requests welcome.
 
-Before submitting a PR: `pnpm typecheck && pnpm test` must both pass with zero errors.
+Before submitting a PR, both of these must pass with zero errors:
+
+```bash
+pnpm typecheck
+pnpm test
+```
 
 ---
 
@@ -259,7 +275,9 @@ Before submitting a PR: `pnpm typecheck && pnpm test` must both pass with zero e
 
 Source-available under [Business Source License 1.1](./LICENSE).
 
-Free for personal use, internal business use, and open source projects. Commercial hosting or resale requires a separate license. The license converts to MIT on 2029-01-01.
+Free for personal use, internal business use, and open source projects.  
+Commercial hosting or resale requires a separate license.  
+Converts to MIT on 2029-01-01.
 
 ---
 

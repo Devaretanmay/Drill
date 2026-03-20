@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 70,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["CrashLoopBackOff", "crash", "exit", "restart"],
+  "fixKeywords": ["container", "config", "port", "environment"],
+  "evidenceMustExist": true
+}

@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 75,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["Redis", "connection", "refused", "ECONNREFUSED"],
+  "fixKeywords": ["Redis", "running", "port", "connection"],
+  "evidenceMustExist": true
+}

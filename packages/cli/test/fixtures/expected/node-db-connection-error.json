@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 75,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["connection", "pool", "database", "postgres"],
+  "fixKeywords": ["pool", "connection", "DB_POOL_SIZE", "max_connections"],
+  "evidenceMustExist": true
+}

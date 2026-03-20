@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 60,
+  "severityOneOf": ["high", "medium"],
+  "causeKeywords": ["goroutine", "leak", "blocked", "waiting"],
+  "fixKeywords": ["goroutine", "context", "cancel", "close", "channel"],
+  "evidenceMustExist": true
+}

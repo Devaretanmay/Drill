@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 80,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["timeout", "duration", "limit", "exceeded"],
+  "fixKeywords": ["timeout", "limit", "increase", "optimize"],
+  "evidenceMustExist": true
+}

@@ -1,0 +1,22 @@
+{
+  "name": "drill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered log diagnosis CLI",
+  "license": "BUSL-1.1",
+  "scripts": {
+    "build": "pnpm --filter cli build",
+    "dev": "pnpm --filter cli dev",
+    "test": "pnpm --filter cli test",
+    "test:coverage": "pnpm --filter cli test:coverage",
+    "typecheck": "pnpm --filter cli typecheck",
+    "lint": "pnpm --filter cli lint",
+    "clean": "pnpm --filter cli clean"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

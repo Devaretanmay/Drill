@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 75,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["NullPointerException", "null", "NPE"],
+  "fixKeywords": ["null", "check", "initialize", "Optional"],
+  "evidenceMustExist": true
+}

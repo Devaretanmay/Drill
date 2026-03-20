@@ -1,0 +1,44 @@
+{
+  "name": "drill-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI-powered log diagnosis CLI",
+  "bin": { "drill": "./dist/index.js" },
+  "main": "./dist/index.js",
+  "types": "./dist/types.d.ts",
+  "engines": { "node": ">=18.0.0" },
+  "scripts": {
+    "build": "tsx build.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test --ext .ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "boxen": "^8.0.1",
+    "commander": "^12.1.0",
+    "conf": "^13.0.0",
+    "ora": "^8.0.1",
+    "chokidar": "^4.0.0",
+    "eventsource-parser": "^3.0.0",
+    "zod": "^3.23.0",
+    "open": "^10.1.0",
+    "glob": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "esbuild": "^0.24.0",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "msw": "^2.7.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 70,
+  "severityOneOf": ["critical", "high", "medium"],
+  "causeKeywords": ["AttributeError", "None", "null", "attribute"],
+  "fixKeywords": ["None", "null", "check", "initialize"],
+  "evidenceMustExist": true
+}

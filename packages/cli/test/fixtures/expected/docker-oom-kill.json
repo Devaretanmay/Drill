@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 80,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["memory", "OOM", "killed", "limit"],
+  "fixKeywords": ["memory", "limit", "increase", "leak"],
+  "evidenceMustExist": true
+}

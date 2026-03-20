@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 65,
+  "severityOneOf": ["critical", "high"],
+  "causeKeywords": ["upstream", "502", "refused", "backend", "proxy"],
+  "fixKeywords": ["upstream", "service", "running", "port"],
+  "evidenceMustExist": true
+}

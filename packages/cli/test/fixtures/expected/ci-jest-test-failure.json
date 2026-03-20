@@ -1,0 +1,7 @@
+{
+  "confidenceMin": 85,
+  "severityOneOf": ["high", "medium"],
+  "causeKeywords": ["test", "assertion", "expected", "received", "failed"],
+  "fixKeywords": ["test", "fix", "update", "assertion"],
+  "evidenceMustExist": true
+}

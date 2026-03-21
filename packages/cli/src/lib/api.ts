@@ -21,13 +21,21 @@ export interface AnalyzeOptions {
   onThinking?: (text: string) => void;
   onResultChunk?: (text: string) => void;
   timeoutMs?: number;
+  providerOverride?: DrillConfig['provider'];
+  providerModelOverride?: string;
 }
 
 /**
  * Loads full auth config with provider defaults.
  */
-function loadConfig(): DrillConfig {
+function loadConfig(options: AnalyzeOptions): DrillConfig {
   const auth = loadAuth();
+  const provider = options.providerOverride ?? auth?.provider ?? 'minimax';
+  const providerModel = options.providerModelOverride
+    ?? (provider === 'ollama'
+      ? auth?.localModel ?? auth?.providerModel ?? 'llama3.2'
+      : auth?.providerModel ?? 'MiniMax-M2.5');
+
   return {
     apiKey: auth?.apiKey ?? '',
     apiUrl: auth?.apiUrl ?? 'https://api.drill.dev',
@@ -37,8 +45,8 @@ function loadConfig(): DrillConfig {
     model: auth?.model ?? 'cloud',
     localModel: auth?.localModel,
     redact: auth?.redact ?? true,
-    provider: auth?.provider ?? 'minimax',
-    providerModel: auth?.providerModel ?? 'MiniMax-M2.5',
+    provider,
+    providerModel,
     customUrl: auth?.customUrl,
   };
 }
@@ -53,10 +61,10 @@ function loadConfig(): DrillConfig {
 export async function analyze(
   options: AnalyzeOptions,
 ): Promise<DrillResult | DrillError> {
-  const config = loadConfig();
+  const config = loadConfig(options);
   const provider = config.provider;
 
-  const apiKey = getProviderApiKey(config) || config.apiKey;
+  const apiKey = getProviderApiKey(config);
 
   if (!apiKey && provider !== 'ollama') {
     const envVar = getProviderEnvVar(provider);
@@ -66,7 +74,7 @@ export async function analyze(
     } satisfies DrillError;
   }
 
-  const adapter = getAdapter(config);
+  const adapter = getAdapter(config, options.timeoutMs ?? 90_000);
 
   const systemPrompt = SYSTEM_PROMPT;
   const userPrompt = buildUserPrompt(options.input, options.context);

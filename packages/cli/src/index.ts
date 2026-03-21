@@ -6,7 +6,6 @@ import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
 import { watchCommand } from './commands/watch.js';
 import { setupCommand } from './commands/setup.js';
-import type { ConfigOptions } from './commands/config.js';
 import type { WatchOptions } from './commands/watch.js';
 
 declare const __VERSION__: string;

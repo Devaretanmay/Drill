@@ -5,7 +5,7 @@
  * Applied by default on all input. Can be disabled with --no-redact flag.
  */
 
-import type { RedactStats, RedactResult, RedactionPattern } from '../types.js';
+import type { RedactResult, RedactionPattern } from '../types.js';
 
 const PATTERNS: RedactionPattern[] = [
   { name: 'ssh_key', re: /-----BEGIN [A-Z ]+KEY-----[\s\S]+?-----END [A-Z ]+KEY-----/g, sub: '[SSH_KEY]' },

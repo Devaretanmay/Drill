@@ -59,11 +59,31 @@ export interface DrillConfig {
   provider: ProviderName;
   providerModel: string;
   customUrl: string | undefined;
+  // Supabase auth fields (added for login flow)
+  supabaseToken?: string;    // session access_token from Supabase
+  supabaseUserId?: string;   // Supabase auth.users UUID
+  email?: string;            // user's email address
+  runsWeek?: number;         // cached run count for display
+  weekLimit?: number;        // 100 for free, 999999 for pro
+  weekReset?: string;        // ISO date of next weekly reset
 }
 
 export interface StreamEvent {
   type: 'thinking' | 'result_chunk' | 'done' | 'error';
   content: string;
+}
+
+export interface FilterOptions {
+  contextBefore: number;
+  contextAfter: number;
+}
+
+export interface FilterResult {
+  content: string;
+  matchedLineCount: number;
+  keptLineCount: number;
+  removedHealthcheckLineCount: number;
+  usedFallback: boolean;
 }
 
 export interface ChunkOptions {
@@ -78,7 +98,7 @@ export interface ChunkResult {
   wasChunked: boolean;
   originalLines: number;
   resultLines: number;
-  strategy: 'passthrough' | 'tail' | 'error-context' | 'mixed';
+  strategy: 'passthrough' | 'tail';
 }
 
 export interface RedactStats {

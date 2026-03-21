@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadAuth, saveAuth, clearAuth, getApiKey, hasStoredAuth, getApiUrl, getPlanInfo, maskKey, incrementRunCount } from '../src/lib/auth';
+import { saveAuth, clearAuth, getApiKey, hasStoredAuth, getApiUrl, getPlanInfo, maskKey } from '../src/lib/auth';
 import Conf from 'conf';
 
 vi.mock('conf');

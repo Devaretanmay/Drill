@@ -6,10 +6,12 @@
  */
 
 import * as readline from 'node:readline';
-import { lookup } from 'node:dns/promises';
 import chalk from 'chalk';
-import { updateAuth } from '../lib/auth.js';
+import ora from 'ora';
+import { loadAuth, updateAuth } from '../lib/auth.js';
 import type { ProviderName } from '../types.js';
+import { fetchModels, ModelFetchError } from '../lib/models.js';
+import type { ProviderId } from '../lib/models.js';
 
 const PROVIDER_INFO: Array<{
   id: ProviderName;
@@ -123,6 +125,7 @@ async function isOllamaRunning(): Promise<boolean> {
  * Runs the interactive setup wizard.
  */
 export async function setupCommand(): Promise<void> {
+  const existingAuth = loadAuth();
   const rl = createReadline();
 
   console.log(`\n  ${chalk.bold('Drill Setup')}`);
@@ -133,7 +136,7 @@ export async function setupCommand(): Promise<void> {
 
   for (let i = 0; i < PROVIDER_INFO.length; i++) {
     const p = PROVIDER_INFO[i]!;
-    console.log(`  ${chalk.cyan(String(i + 1).padStart(2) + '.')} ${chalk.bold(p.name.padEnd(12))} ${chalk.dim(`(${p.model})`)}`);
+    console.log(`  ${chalk.cyan(String(i + 1).padStart(2) + '.')} ${chalk.bold(p.name)}`);
     console.log(`      ${chalk.dim(p.description)}\n`);
   }
 
@@ -148,9 +151,10 @@ export async function setupCommand(): Promise<void> {
 
   let apiKey = '';
   let customUrl = '';
+  let selectedModel = selected.model;
 
   if (selected.needsKey) {
-    console.log(`\n  ${chalk.bold(selected.name)} selected. Model: ${chalk.cyan(selected.model)}`);
+    console.log(`\n  ${chalk.bold(selected.name)} selected.`);
 
     if (selected.id === 'custom') {
       customUrl = await askQuestion(rl, `\n  ${chalk.bold('Enter your API base URL:')} `);
@@ -170,8 +174,70 @@ export async function setupCommand(): Promise<void> {
     if (selected.id === 'openai' && !apiKey.startsWith('sk-')) {
       console.log(`\n  ${chalk.dim('Note: OpenAI API keys typically start with "sk-".')}`);
     }
+
+    // Model discovery
+    const spinner = ora('Fetching available models...').start();
+    let models: string[] = [];
+
+    try {
+      models = await fetchModels(selected.id as ProviderId, apiKey);
+      spinner.succeed(
+        models.length > 0
+          ? `Found ${models.length} models`
+          : 'Provider ready'
+      );
+    } catch (e: unknown) {
+      if (e instanceof ModelFetchError && e.code === 'INVALID_KEY') {
+        spinner.fail('Invalid API key');
+        console.error(chalk.red('\n  API key rejected by provider. Check and try again.\n'));
+        rl.close();
+        process.exit(1);
+      }
+      spinner.fail('Could not fetch models');
+      if (e instanceof ModelFetchError) {
+        console.log(chalk.dim(`  ${e.message}`));
+      }
+    }
+
+    const DOCS: Partial<Record<string, string>> = {
+      openai:    'https://platform.openai.com/docs/models',
+      anthropic: 'https://docs.anthropic.com/en/docs/models-overview',
+      groq:      'https://console.groq.com/docs/models',
+      mistral:   'https://docs.mistral.ai/getting-started/models/',
+      together:  'https://docs.together.ai/docs/inference-models',
+    };
+
+    if (models.length > 0) {
+      console.log(chalk.bold('\n  Available models:\n'));
+      models.forEach((m, i) => {
+        console.log(`  ${chalk.dim(String(i + 1).padStart(3))}  ${m}`);
+      });
+      console.log();
+
+      const raw = await askQuestion(rl, '  Select a model (enter number): ');
+      const idx = parseInt(raw.trim(), 10) - 1;
+
+      if (isNaN(idx) || idx < 0 || idx >= models.length || !models[idx]) {
+        console.error(chalk.red('\n  Invalid selection.\n'));
+        rl.close();
+        process.exit(1);
+      }
+      selectedModel = models[idx]!;
+    } else {
+      const docsUrl = DOCS[selected.id];
+      if (docsUrl) {
+        console.log(chalk.dim(`\n  See available models at: ${docsUrl}`));
+      }
+      console.log();
+      selectedModel = (await askQuestion(rl, '  Enter model name: ')).trim();
+      if (!selectedModel) {
+        console.error(chalk.red('\n  Model name cannot be empty.\n'));
+        rl.close();
+        process.exit(1);
+      }
+    }
   } else {
-    console.log(`\n  ${chalk.bold('Ollama')} selected. Model: ${chalk.cyan(selected.model)}`);
+    console.log(`\n  ${chalk.bold('Ollama')} selected.`);
     console.log(`  ${chalk.dim('No API key needed for local models.')}`);
 
     const running = await isOllamaRunning();
@@ -188,6 +254,11 @@ export async function setupCommand(): Promise<void> {
           const available = data.models ?? [];
           if (available.length > 0) {
             console.log(`  ${chalk.dim('Available models:')} ${available.map(m => m.name).join(', ')}`);
+            console.log();
+            const raw = await askQuestion(rl, `  Select model (or press Enter for default): `);
+            if (raw.trim()) {
+              selectedModel = raw.trim();
+            }
           }
         }
       } catch {
@@ -196,7 +267,7 @@ export async function setupCommand(): Promise<void> {
     } else {
       console.log(`\n  ${chalk.yellow('⚠ Ollama is not running.')}`);
       console.log(`  ${chalk.dim('Start it with:')} ${chalk.cyan('ollama serve')}`);
-      console.log(`  ${chalk.dim('Then pull a model:')} ${chalk.cyan(`ollama pull ${selected.model}`)}`);
+      console.log(`  ${chalk.dim('Then pull a model:')} ${chalk.cyan(`ollama pull ${selectedModel}`)}`);
     }
   }
 
@@ -204,7 +275,7 @@ export async function setupCommand(): Promise<void> {
 
   const authUpdate: { provider: ProviderName; providerModel: string; apiKey: string; customUrl?: string } = {
     provider: selected.id,
-    providerModel: selected.model,
+    providerModel: selectedModel,
     apiKey,
   };
   if (customUrl) {
@@ -214,9 +285,13 @@ export async function setupCommand(): Promise<void> {
 
   console.log(`\n  ${chalk.green('✓')} Provider saved!`);
   console.log(`  ${chalk.bold('Provider:')} ${selected.name}`);
-  console.log(`  ${chalk.bold('Model:')} ${selected.model}`);
+  console.log(`  ${chalk.bold('Model:')} ${selectedModel}`);
   if (apiKey) {
     console.log(`  ${chalk.bold('API Key:')} ${chalk.dim('(stored)')}`);
   }
-  console.log(`\n  ${chalk.dim('Try it now:')} ${chalk.cyan("echo 'Error: ECONNREFUSED' | drill")}\n`);
+  if (existingAuth?.supabaseToken && existingAuth?.supabaseUserId) {
+    console.log(`\n  ${chalk.dim('Try it now:')} ${chalk.cyan("echo 'Error: ECONNREFUSED' | drill")}\n`);
+  } else {
+    console.log(`\n  ${chalk.dim('Next:')} ${chalk.cyan('drill login')} ${chalk.dim('to activate your account, then run Drill.')}\n`);
+  }
 }

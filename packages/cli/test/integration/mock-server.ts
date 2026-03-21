@@ -23,8 +23,7 @@ const MOCK_RESULT = JSON.stringify({
 export function createMockServer(port = 9999): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/chat/completions') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
+      req.on('data', () => undefined);
       req.on('end', () => {
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',

@@ -191,36 +191,27 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   together: 'https://api.together.xyz/v1',
 };
 
-const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  openai: 'gpt-4o',
-  anthropic: 'claude-sonnet-4-20250514',
-  groq: 'llama-3.1-70b-versatile',
-  mistral: 'mistral-large-latest',
-  ollama: 'llama3.2',
-  minimax: 'MiniMax-M2.5',
-  together: 'MiniMaxAI/MiniMax-M2.5',
-};
-
 export const VALID_PROVIDERS: ProviderName[] = [
   'openai', 'anthropic', 'groq', 'mistral', 'ollama', 'minimax', 'together', 'custom',
 ];
 
 /**
  * Returns the correct adapter for the given DrillConfig.
+ * Throws ProviderError if no model is configured.
  */
-export function getAdapter(config: DrillConfig): LLMAdapter {
-  const timeoutMs = 90_000;
+export function getAdapter(config: DrillConfig, timeoutMs = 90_000): LLMAdapter {
+  if (!config.providerModel) {
+    throw new ProviderError('NO_KEY', 'No model configured. Run: drill setup');
+  }
 
   switch (config.provider) {
     case 'anthropic': {
       const apiKey = getProviderApiKey(config);
-      const model = config.providerModel || PROVIDER_DEFAULT_MODELS['anthropic'] || 'claude-sonnet-4-20250514';
-      return new AnthropicAdapter(apiKey, model, timeoutMs);
+      return new AnthropicAdapter(apiKey, config.providerModel, timeoutMs);
     }
 
     case 'ollama': {
-      const model = config.providerModel || PROVIDER_DEFAULT_MODELS['ollama'] || 'llama3.2';
-      return new OllamaAdapter(model, timeoutMs);
+      return new OllamaAdapter(config.providerModel, timeoutMs);
     }
 
     case 'openai':
@@ -230,14 +221,13 @@ export function getAdapter(config: DrillConfig): LLMAdapter {
     case 'together': {
       const baseUrl = PROVIDER_BASE_URLS[config.provider] ?? '';
       const apiKey = getProviderApiKey(config);
-      const model = config.providerModel || PROVIDER_DEFAULT_MODELS[config.provider] || config.providerModel;
-      return new OpenAICompatAdapter(apiKey, baseUrl, model, timeoutMs);
+      return new OpenAICompatAdapter(apiKey, baseUrl, config.providerModel, timeoutMs);
     }
 
     case 'custom': {
       const baseUrl = config.customUrl ?? '';
       const apiKey = getProviderApiKey(config);
-      return new OpenAICompatAdapter(apiKey, baseUrl, config.providerModel || 'gpt-4o', timeoutMs);
+      return new OpenAICompatAdapter(apiKey, baseUrl, config.providerModel, timeoutMs);
     }
 
     default: {
@@ -254,14 +244,14 @@ export function getProviderApiKey(config: DrillConfig): string {
   const provider = config.provider ?? 'minimax';
 
   switch (provider) {
-    case 'openai': return process.env['OPENAI_API_KEY'] ?? '';
-    case 'anthropic': return process.env['ANTHROPIC_API_KEY'] ?? '';
-    case 'groq': return process.env['GROQ_API_KEY'] ?? '';
-    case 'mistral': return process.env['MISTRAL_API_KEY'] ?? '';
+    case 'openai': return process.env['OPENAI_API_KEY'] || config.apiKey || '';
+    case 'anthropic': return process.env['ANTHROPIC_API_KEY'] || config.apiKey || '';
+    case 'groq': return process.env['GROQ_API_KEY'] || config.apiKey || '';
+    case 'mistral': return process.env['MISTRAL_API_KEY'] || config.apiKey || '';
     case 'ollama': return '';
-    case 'minimax': return process.env['MINIMAX_API_KEY'] ?? '';
-    case 'together': return process.env['TOGETHER_API_KEY'] ?? '';
-    case 'custom': return process.env['CUSTOM_API_KEY'] ?? '';
+    case 'minimax': return process.env['MINIMAX_API_KEY'] || config.apiKey || '';
+    case 'together': return process.env['TOGETHER_API_KEY'] || config.apiKey || '';
+    case 'custom': return process.env['CUSTOM_API_KEY'] || config.apiKey || '';
   }
 }
 

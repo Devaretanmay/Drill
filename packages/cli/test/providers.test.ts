@@ -84,9 +84,10 @@ describe('getAdapter', () => {
     }).toThrow('Unknown provider: unknown');
   });
 
-  it('uses default model when providerModel is empty', () => {
-    const adapter = getAdapter(mockConfig({ provider: 'openai', providerModel: '' }));
-    expect(adapter).toBeDefined();
+  it('throws ProviderError when providerModel is empty', () => {
+    expect(() => {
+      getAdapter(mockConfig({ provider: 'openai', providerModel: '' }));
+    }).toThrow('No model configured. Run: drill setup');
   });
 });
 
@@ -152,9 +153,15 @@ describe('getProviderApiKey', () => {
     expect(getProviderApiKey(config)).toBe('');
   });
 
-  it('returns empty string when env var is not set', () => {
+  it('returns stored config key when env var is not set', () => {
     const config = mockConfig({ provider: 'openai' });
-    expect(getProviderApiKey(config)).toBe('');
+    expect(getProviderApiKey(config)).toBe('test-key');
+  });
+
+  it('prefers provider env var over stored config key', () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-env-override');
+    const config = mockConfig({ provider: 'openai' });
+    expect(getProviderApiKey(config)).toBe('sk-env-override');
   });
 
   it('falls back to minimax for unknown provider', () => {

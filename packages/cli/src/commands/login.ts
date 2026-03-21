@@ -1,121 +1,224 @@
 /**
  * Login Command Module
- * 
- * Authenticates the user via browser-based OAuth flow.
- * Flow: generate UUID state → open browser → poll every 2s → save token
+ *
+ * Authenticates user via Supabase magic link + OTP flow.
+ * Flow: email → signInWithOtp → user enters 6-digit code → verifyOtp → session
  */
 
-import { randomUUID } from 'node:crypto';
-import { hostname } from 'node:os';
-import open from 'open';
+import readline from 'node:readline/promises';
+import { createHash } from 'node:crypto';
+import pkg from 'node-machine-id';
+const { machineIdSync } = pkg;
 import chalk from 'chalk';
-import ora from 'ora';
-import { saveAuth } from '../lib/auth.js';
+import { supabase, authedClient } from '../lib/supabase.js';
+import { loadAuth, saveAuth, getApiKey } from '../lib/auth.js';
 
-const POLL_INTERVAL_MS = 2_000;
-const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes
-const AUTH_BASE_URL = 'https://drill.dev';
-
-interface PollResponse {
-  status: 'pending' | 'complete' | 'expired' | 'error';
-  apiKey?: string;
-  plan?: string;
-  email?: string;
-  runLimit?: number;
-  error?: string;
+function createReadline(): readline.Interface {
+  return readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
 }
 
-async function pollForAuth(stateToken: string, deviceName: string): Promise<PollResponse> {
-  const startTime = Date.now();
-  const spinner = ora({ text: 'Waiting for authentication...', color: 'cyan' }).start();
+async function askQuestion(rl: readline.Interface, question: string): Promise<string> {
+  const answer = await rl.question(question);
+  return answer.trim();
+}
 
-  while (Date.now() - startTime < POLL_TIMEOUT_MS) {
-    try {
-      const response = await fetch(
-        `${AUTH_BASE_URL}/api/cli-auth/poll?state=${stateToken}&device=${encodeURIComponent(deviceName)}`,
-        { signal: AbortSignal.timeout(10_000) }
-      );
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
-      if (response.status === 200) {
-        const data = await response.json() as PollResponse;
-        
-        if (data.status === 'complete') {
-          spinner.succeed('Authentication successful!');
-          return data;
-        }
-        
-        if (data.status === 'expired' || data.status === 'error') {
-          spinner.fail(data.error ?? 'Authentication failed or expired.');
-          return data;
-        }
-        
-        // status is 'pending' — keep polling
-        spinner.text = `Waiting for authentication... (${Math.floor((Date.now() - startTime) / 1000)}s)`;
-      }
-    } catch {
-      // Network error during poll — keep trying
-    }
-
-    await sleep(POLL_INTERVAL_MS);
+function formatWeekReset(isoDate: string): string {
+  if (!isoDate) return 'Unknown';
+  try {
+    return new Date(isoDate).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return 'Unknown';
   }
-
-  spinner.fail('Authentication timed out. Please try again.');
-  return { status: 'expired', error: 'Timed out after 5 minutes.' };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
  * Executes the login flow:
- * 1. Generate a random state token
- * 2. Open browser to drill.dev/cli-auth
- * 3. Poll for auth completion
- * 4. Save token to config
+ * 1. Check if already logged in
+ * 2. Prompt for email
+ * 3. Send magic link via Supabase
+ * 4. Prompt for 6-digit OTP code
+ * 5. Verify OTP and get session
+ * 6. Upsert user record in Supabase
+ * 7. Save to ~/.drill/config
  */
 export async function loginCommand(): Promise<void> {
-  const deviceName = process.env['DRILL_HOSTNAME'] ?? hostname();
-  const stateToken = randomUUID();
-  const authUrl = `${AUTH_BASE_URL}/cli-auth?state=${stateToken}&device=${encodeURIComponent(deviceName)}`;
+  const rl = createReadline();
 
-  console.log(`\n  ${chalk.bold('Drill Login')}\n`);
-  console.log(`  Opening browser to authenticate...\n`);
-  console.log(`  ${chalk.dim(authUrl)}\n`);
-  
-  try {
-    await open(authUrl, { wait: false });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.log(`  ${chalk.yellow('Could not open browser automatically.')}`);
-    console.log(`  Visit: ${chalk.underline(authUrl)}\n`);
+  // Step 1: Check if already logged in
+  const existingAuth = loadAuth();
+  if (existingAuth?.supabaseToken && existingAuth?.email) {
+    const answer = await askQuestion(
+      rl,
+      chalk.yellow(`\n  Already logged in as ${existingAuth.email}. Re-authenticate? (y/n): `),
+    );
+    if (answer.toLowerCase() !== 'y') {
+      console.log(chalk.dim('  Login cancelled.\n'));
+      rl.close();
+      return;
+    }
   }
 
-  const result = await pollForAuth(stateToken, deviceName);
+  // Step 2: Prompt for email
+  console.log(`\n  ${chalk.bold('Drill Login')}\n`);
 
-  if (result.status === 'complete' && result.apiKey) {
-    saveAuth({
-      apiKey: result.apiKey,
-      apiUrl: AUTH_BASE_URL,
-      plan: result.plan ?? 'free',
-      runCount: 0,
-      runLimit: result.runLimit ?? 20,
-      provider: 'minimax',
-      providerModel: 'MiniMax-M2.5',
-      model: 'cloud',
-      localModel: undefined,
-      redact: true,
-      customUrl: undefined,
-    });
+  let email = await askQuestion(rl, chalk.bold('  Enter your email: '));
 
-    console.log(`\n  ${chalk.green('✓')} ${chalk.bold('Authenticated')}`);
-    if (result.email) {
-      console.log(`    Account: ${chalk.dim(result.email)}`);
-    }
-    console.log(`    Plan: ${chalk.bold(result.plan ?? 'free')} (${result.runLimit ?? 20} runs/month)\n`);
-    console.log(`  ${chalk.dim('Run "drill status" to see your current usage.\n')}`);
-  } else {
-    console.log(`\n  ${chalk.red('✗')} ${chalk.bold('Login failed:')} ${result.error ?? 'Unknown error'}\n`);
+  if (!isValidEmail(email)) {
+    console.error(chalk.red('\n  Invalid email address.\n'));
+    rl.close();
     process.exit(1);
   }
+
+  // Step 3: Send magic link
+  const { error: sendError } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true },
+  });
+
+  if (sendError) {
+    console.error(chalk.red(`\n  Failed to send magic link: ${sendError.message}\n`));
+    rl.close();
+    process.exit(1);
+  }
+
+  console.log(chalk.green(`\n  ✓ Magic link sent to ${email}`));
+  console.log(chalk.dim('  Check your email for a 6-digit code.'));
+  console.log(chalk.dim('  The link in the email also works — just open it in any browser.\n'));
+
+  // Step 5: Prompt for 6-digit OTP code
+  const token = await askQuestion(rl, chalk.bold('  Enter the 6-digit code: '));
+
+  if (token.length !== 6 || !/^\d+$/.test(token)) {
+    console.error(chalk.red('\n  Invalid code. Run drill login to try again.\n'));
+    rl.close();
+    process.exit(1);
+  }
+
+  // Step 6: Verify OTP
+  const { data, error: verifyError } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email',
+  });
+
+  if (verifyError) {
+    console.error(chalk.red(`\n  Invalid code. Run drill login to try again.\n`));
+    rl.close();
+    process.exit(1);
+  }
+
+  if (!data.session) {
+    console.error(chalk.red('\n  No session received. Try again.\n'));
+    rl.close();
+    process.exit(1);
+  }
+
+  // Step 7: Get session data
+  const accessToken = data.session.access_token;
+  const userId = data.session.user.id;
+
+  // Step 8: Get machine ID
+  const machineId = machineIdSync(true);
+
+  // Step 9: Hash provider API key if exists
+  const existingKey = getApiKey();
+  const keyHash = existingKey
+    ? createHash('sha256').update(existingKey).digest('hex').slice(0, 16)
+    : null;
+
+  // Step 10: Upsert user record
+  const client = authedClient(accessToken);
+  const { error: upsertError } = await client.from('users').upsert(
+    {
+      id: userId,
+      email,
+      machine_id: machineId,
+      key_hash: keyHash,
+    },
+    { onConflict: 'id' },
+  );
+
+  if (upsertError) {
+    console.warn(chalk.yellow(`  Note: Could not update user record (${upsertError.message})`));
+  }
+
+  // Step 11: Check for abuse (silent - just log, don't block)
+  try {
+    const { data: abuseData } = await client.rpc('check_abuse', {
+      p_machine_id: machineId,
+      p_key_hash: keyHash,
+      p_user_id: userId,
+    });
+    if (abuseData?.machine_duplicate || abuseData?.key_duplicate) {
+      console.warn(chalk.dim('  (flagged for review - duplicate account detected)'));
+    }
+  } catch {
+    // Ignore abuse check failures
+  }
+
+  // Step 12: Fetch initial run count
+  let runsWeek = 0;
+  let plan = 'free';
+  let weekReset = '';
+
+  try {
+    const { data: userData } = await client
+      .from('users')
+      .select('runs_week, week_reset, plan')
+      .eq('id', userId)
+      .single();
+
+    if (userData) {
+      runsWeek = userData.runs_week ?? 0;
+      plan = userData.plan ?? 'free';
+      weekReset = userData.week_reset ?? '';
+    }
+  } catch {
+    // Use defaults if cannot fetch
+  }
+
+  // Step 13: Save to config
+  const limit = plan === 'free' ? 100 : 999999;
+  const authData = {
+    apiKey: existingAuth?.apiKey ?? '',
+    apiUrl: existingAuth?.apiUrl ?? 'https://api.drill.dev',
+    plan,
+    runCount: existingAuth?.runCount ?? 0,
+    runLimit: limit,
+    model: existingAuth?.model ?? 'cloud',
+    localModel: existingAuth?.localModel,
+    redact: existingAuth?.redact ?? true,
+    provider: existingAuth?.provider ?? 'minimax',
+    providerModel: existingAuth?.providerModel ?? '',
+    customUrl: existingAuth?.customUrl,
+    supabaseToken: accessToken,
+    supabaseUserId: userId,
+    email,
+    runsWeek,
+    weekLimit: limit,
+    weekReset,
+  };
+
+  saveAuth(authData);
+
+  // Step 14: Print success
+  console.log(chalk.green('\n  ✓ Authenticated'));
+  console.log(`  Email: ${email}`);
+  console.log(`  Plan: ${chalk.bold(plan)} — ${limit} analyses per week`);
+  console.log(`  Runs this week: ${runsWeek}/${limit}`);
+  console.log(`  Resets: ${formatWeekReset(weekReset)}`);
+  console.log(chalk.dim('\n  Run: echo "Error: ECONNREFUSED" | drill\n'));
+
+  rl.close();
 }

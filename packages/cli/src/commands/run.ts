@@ -7,15 +7,14 @@
  */
 
 import chalk from 'chalk';
-import { redact, redactWithStats } from '../lib/redact.js';
-import { chunk } from '../lib/chunk.js';
+import { preprocess, preprocessVerbose } from '../lib/preprocess.js';
 import { buildContext } from '../lib/context.js';
 import { analyze } from '../lib/api.js';
 import {
   startSpinner, stopSpinner, showThinking, showResult, showError,
   showInputInfo, showRedactStats,
 } from '../lib/render.js';
-import { loadAuth } from '../lib/auth.js';
+import { loadAuth, isAuthenticated, checkAndIncrementRun } from '../lib/auth.js';
 import type { DrillError } from '../types.js';
 
 export interface RunOptions {
@@ -30,10 +29,55 @@ export interface RunOptions {
   timeout?: string;
 }
 
+function parseTimeoutMs(timeoutSeconds: string | undefined): number {
+  if (timeoutSeconds === undefined) return 90_000;
+
+  const seconds = parseInt(timeoutSeconds, 10);
+  if (isNaN(seconds) || seconds < 1) {
+    console.error(`\n  Invalid --timeout value: ${timeoutSeconds}. Must be a positive integer.\n`);
+    process.exit(1);
+  }
+
+  return seconds * 1000;
+}
+
 export async function runCommand(
   inlineInput: string | undefined,
   options: RunOptions,
 ): Promise<void> {
+  if (options.model && !options.local) {
+    console.error('\n  --model can only be used together with --local.\n');
+    process.exit(1);
+  }
+
+  // Auth check
+  if (!isAuthenticated()) {
+    console.error(chalk.yellow('\n  Not logged in. Run: drill login\n'));
+    process.exit(1);
+  }
+
+  // Run limit check
+  const limitCheck = await checkAndIncrementRun();
+
+  if (!limitCheck.allowed) {
+    showError({
+      code: 'LIMIT_REACHED',
+      message: `Weekly limit reached (${limitCheck.runsWeek}/${limitCheck.limit})`,
+    });
+    if (limitCheck.weekReset) {
+      console.log(chalk.dim(`  Resets: ${limitCheck.weekReset}\n`));
+    }
+    process.exit(2);
+  }
+
+  // Warn when approaching limit
+  const pct = limitCheck.runsWeek / limitCheck.limit;
+  if (pct >= 0.9 && limitCheck.limit < 999999) {
+    console.log(chalk.yellow(
+      `  ${limitCheck.runsWeek}/${limitCheck.limit} analyses used this week\n`
+    ));
+  }
+
   const auth = loadAuth();
   if (!auth?.provider && !process.env['DRILL_API_KEY']) {
     console.error('\n  Drill is not configured.\n');
@@ -85,37 +129,48 @@ export async function runCommand(
     contextBlock = await buildContext(options.context, rawInput);
   }
 
-  let processedInput: string;
+  const doRedact = !options.noRedact;
 
-  if (options.noRedact) {
-    processedInput = rawInput;
-    if (options.verbose) {
-      console.log('\x1b[2m  Redaction: disabled (--no-redact)\x1b[0m');
+  const preprocessed = options.verbose
+    ? preprocessVerbose(rawInput, doRedact)
+    : preprocess(rawInput, doRedact);
+
+  const finalInput = preprocessed.content;
+
+  if (options.verbose) {
+    const verboseResult = preprocessed as ReturnType<typeof preprocessVerbose>;
+    if (verboseResult.redactStats.totalReplacements > 0) {
+      showRedactStats(verboseResult.redactStats);
     }
-  } else {
-    const { redacted, stats } = redactWithStats(rawInput);
-    processedInput = redacted;
-    if (options.verbose) {
-      showRedactStats(stats);
+    if (!preprocessed.filterResult.usedFallback) {
+      console.log(chalk.dim(
+        `  Filtered: ${preprocessed.filterResult.matchedLineCount} signal lines found, ` +
+        `${preprocessed.filterResult.removedHealthcheckLineCount} healthcheck lines removed`
+      ));
     }
-    if (processedInput === '__DRILL_FULLY_REDACTED__') {
-      showError({ code: 'REDACTED_EMPTY', message: 'All content was redacted' });
-      process.exit(1);
+    if (preprocessed.chunkResult.wasChunked) {
+      console.log(chalk.dim(
+        `  Chunked: ${preprocessed.chunkResult.originalLines} → ${preprocessed.chunkResult.resultLines} lines`
+      ));
     }
   }
 
-  const chunkResult = chunk(processedInput);
-  const finalInput = chunkResult.content;
+  if (doRedact && finalInput === '__DRILL_FULLY_REDACTED__') {
+    showError({ code: 'REDACTED_EMPTY', message: 'All content was redacted' });
+    process.exit(1);
+  }
 
   if (!options.json) {
-    showInputInfo(chunkResult.resultLines, chunkResult.wasChunked);
+    showInputInfo(preprocessed.chunkResult.resultLines, preprocessed.chunkResult.wasChunked);
   }
 
   let thinkingStarted = false;
+  const timeoutMs = parseTimeoutMs(options.timeout);
+  const localModel = options.local ? (options.model ?? auth?.localModel ?? 'llama3.2') : undefined;
 
   const analyzeOptions: Parameters<typeof analyze>[0] = {
     input: finalInput,
-    timeoutMs: options.timeout ? parseInt(options.timeout, 10) * 1000 : 90_000,
+    timeoutMs,
     onThinking: (text) => {
       if (!options.json) {
         if (!thinkingStarted) {
@@ -130,6 +185,11 @@ export async function runCommand(
 
   if (contextBlock) {
     analyzeOptions.context = contextBlock;
+  }
+
+  if (options.local && localModel) {
+    analyzeOptions.providerOverride = 'ollama';
+    analyzeOptions.providerModelOverride = localModel;
   }
 
   if (!options.json) {

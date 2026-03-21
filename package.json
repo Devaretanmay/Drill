@@ -5,13 +5,13 @@
   "description": "AI-powered log diagnosis CLI",
   "license": "BUSL-1.1",
   "scripts": {
-    "build": "pnpm --filter cli build",
-    "dev": "pnpm --filter cli dev",
-    "test": "pnpm --filter cli test",
-    "test:coverage": "pnpm --filter cli test:coverage",
-    "typecheck": "pnpm --filter cli typecheck",
-    "lint": "pnpm --filter cli lint",
-    "clean": "pnpm --filter cli clean"
+    "build": "pnpm --filter drill-cli build",
+    "dev": "pnpm --filter drill-cli dev",
+    "test": "pnpm --filter drill-cli test",
+    "test:coverage": "pnpm --filter drill-cli test:coverage",
+    "typecheck": "pnpm --filter drill-cli typecheck",
+    "lint": "pnpm --filter drill-cli lint",
+    "clean": "pnpm --filter drill-cli clean"
   },
   "engines": {
     "node": ">=18.0.0"

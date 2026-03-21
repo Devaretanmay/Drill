@@ -33,4 +33,9 @@ export default defineConfig({
       ],
     },
   },
+  resolve: {
+    alias: {
+      '../../src/lib/models': '/Users/tanmaydevare/Tanmay/drill/packages/cli/src/lib/models.ts',
+    },
+  },
 });

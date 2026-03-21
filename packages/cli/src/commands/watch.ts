@@ -12,15 +12,13 @@
  * Ctrl+C: clean shutdown with session stats
  */
 
-import { createReadStream } from 'node:fs';
 import { statSync, readFileSync } from 'node:fs';
 import { watch as fsWatch, type FSWatcher } from 'chokidar';
 import chalk from 'chalk';
-import { redact, redactWithStats } from '../lib/redact.js';
-import { chunk } from '../lib/chunk.js';
+import { preprocess } from '../lib/preprocess.js';
 import { analyze } from '../lib/api.js';
 import { stopSpinner, showThinking, showResult, showError } from '../lib/render.js';
-import { getApiKey } from '../lib/auth.js';
+import { getApiKey, loadAuth } from '../lib/auth.js';
 import type { DrillError } from '../types.js';
 
 const ERROR_REGEX = /\b(ERROR|FATAL|Exception|Traceback|panic|CRITICAL|SEVERE)\b/i;
@@ -38,14 +36,34 @@ export interface WatchOptions {
   timeout?: string;
 }
 
+function parseTimeoutMs(timeoutSeconds: string | undefined): number {
+  if (timeoutSeconds === undefined) return 90_000;
+
+  const seconds = parseInt(timeoutSeconds, 10);
+  if (isNaN(seconds) || seconds < 1) {
+    console.error(`\n  Invalid --timeout value: ${timeoutSeconds}. Must be a positive integer.\n`);
+    process.exit(1);
+  }
+
+  return seconds * 1000;
+}
+
 /**
  * Watches a file for error patterns and runs analysis on detected errors.
  */
 export async function watchCommand(options: WatchOptions): Promise<void> {
   const filePath = options.watch;
   const apiKey = getApiKey();
+  const auth = loadAuth();
+  const timeoutMs = parseTimeoutMs(options.timeout);
+  const localModel = options.local ? (options.model ?? auth?.localModel ?? 'llama3.2') : undefined;
 
-  if (!apiKey) {
+  if (options.model && !options.local) {
+    console.error('\n  --model can only be used together with --local.\n');
+    process.exit(1);
+  }
+
+  if (!options.local && !apiKey) {
     console.error(`\n  ${chalk.red('✕')} No API key configured.\n`);
     console.error('  Run "drill login" or set DRILL_API_KEY to use drill --watch.\n');
     process.exit(1);
@@ -111,19 +129,11 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
       console.log(chalk.dim(`  ${new Date().toLocaleTimeString()}\n`));
     }
 
-    let processedInput: string;
-    if (options.noRedact) {
-      processedInput = content;
-    } else {
-      const { redacted } = redactWithStats(content);
-      processedInput = redacted;
-      if (processedInput === '__DRILL_FULLY_REDACTED__') {
-        return;
-      }
+    const preprocessed = preprocess(content, !options.noRedact);
+    if (preprocessed.content === '__DRILL_FULLY_REDACTED__') {
+      return;
     }
-
-    const chunkResult = chunk(processedInput);
-    const finalInput = chunkResult.content;
+    const finalInput = preprocessed.content;
 
     if (!options.json) {
       stopSpinner();
@@ -131,9 +141,9 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
 
     let thinkingStarted = false;
 
-    const result = await analyze({
+    const analyzeOptions: Parameters<typeof analyze>[0] = {
       input: finalInput,
-      timeoutMs: options.timeout ? parseInt(options.timeout, 10) * 1000 : 90_000,
+      timeoutMs,
       onThinking: (text) => {
         if (!options.json) {
           if (!thinkingStarted) {
@@ -143,7 +153,16 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
         }
       },
       onResultChunk: () => undefined,
-    });
+    };
+
+    if (options.local) {
+      analyzeOptions.providerOverride = 'ollama';
+      if (localModel) {
+        analyzeOptions.providerModelOverride = localModel;
+      }
+    }
+
+    const result = await analyze(analyzeOptions);
 
     if ('code' in result) {
       const error = result as DrillError;

@@ -4,15 +4,31 @@ import { statusCommand } from '../../src/commands/status';
 import { logoutCommand } from '../../src/commands/logout';
 
 vi.mock('../../src/lib/auth', () => ({
-  loadAuth: vi.fn(),
+  loadAuth: vi.fn().mockReturnValue({ supabaseToken: null }),
   saveAuth: vi.fn(),
   clearAuth: vi.fn(),
+  clearSessionAuth: vi.fn(),
   getApiKey: vi.fn(),
   hasStoredAuth: vi.fn(),
   getApiUrl: vi.fn(),
   maskKey: vi.fn().mockImplementation((k: string) => k.slice(0, 4) + '***'),
   getProvider: vi.fn().mockReturnValue('minimax'),
   getProviderModel: vi.fn().mockReturnValue('MiniMax-M2.5'),
+  isAuthenticated: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock('../../src/lib/supabase', () => ({
+  supabase: {},
+  authedClient: vi.fn().mockReturnValue({
+    auth: { signOut: vi.fn().mockResolvedValue({}) },
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null }),
+        }),
+      }),
+    }),
+  }),
 }));
 
 vi.mock('../../src/lib/env', () => ({
@@ -26,7 +42,6 @@ vi.mock('../../src/lib/env', () => ({
 }));
 
 import * as auth from '../../src/lib/auth';
-import * as env from '../../src/lib/env';
 
 describe('commands', () => {
   beforeEach(() => {
@@ -65,6 +80,9 @@ describe('commands', () => {
     it('config get plan — shows plan', async () => {
       vi.mocked(auth.loadAuth).mockReturnValue({
         apiKey: 'key', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 5, runLimit: 100,
+        provider: 'openai' as const, providerModel: 'gpt-4o',
+        model: 'cloud' as const, localModel: undefined,
+        redact: true, customUrl: undefined,
       });
 
       await configCommand({ action: 'get', key: 'plan' });
@@ -75,6 +93,9 @@ describe('commands', () => {
     it('config get runLimit — shows limit', async () => {
       vi.mocked(auth.loadAuth).mockReturnValue({
         apiKey: 'key', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 5, runLimit: 100,
+        provider: 'openai' as const, providerModel: 'gpt-4o',
+        model: 'cloud' as const, localModel: undefined,
+        redact: true, customUrl: undefined,
       });
 
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
@@ -133,61 +154,36 @@ describe('commands', () => {
 
     afterEach(() => {
       console.log = originalLog;
-      delete process.env['DRILL_API_KEY'];
+      vi.unstubAllEnvs();
     });
 
-    it('shows status with no API key', async () => {
+    it('shows not logged in when no auth', async () => {
       vi.mocked(auth.loadAuth).mockReturnValue(null);
-      vi.mocked(auth.hasStoredAuth).mockReturnValue(false);
+      vi.mocked(auth.isAuthenticated).mockReturnValue(false);
 
       await statusCommand();
 
-      expect(consoleOutput.join('')).toContain('Drill Status');
-      expect(consoleOutput.join('')).toContain('No API key');
+      const output = consoleOutput.join('');
+      expect(output).toContain('Not logged in');
     });
 
-    it('shows status with stored auth', async () => {
+    it('shows status when logged in', async () => {
       vi.mocked(auth.loadAuth).mockReturnValue({
-        apiKey: 'test-key-123456', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 5, runLimit: 100,
+        supabaseToken: 'test-token',
+        supabaseUserId: 'test-user-id',
+        email: 'test@example.com',
+        apiKey: 'key', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 5, runLimit: 100,
         provider: 'openai', providerModel: 'gpt-4o', model: 'cloud', localModel: undefined,
         redact: true, customUrl: undefined,
+        runsWeek: 10, weekLimit: 100, weekReset: '2029-01-01',
       });
-      vi.mocked(auth.hasStoredAuth).mockReturnValue(true);
-      vi.mocked(auth.getProvider).mockReturnValue('openai');
-      vi.mocked(auth.getProviderModel).mockReturnValue('gpt-4o');
+      vi.mocked(auth.isAuthenticated).mockReturnValue(true);
 
       await statusCommand();
 
       const output = consoleOutput.join('');
-      expect(output).toContain('Drill Status');
-      expect(output).toContain('pro');
-    });
-
-    it('shows status with env var key', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue(null);
-      vi.mocked(auth.hasStoredAuth).mockReturnValue(false);
-      vi.mocked(auth.getProvider).mockReturnValue('minimax');
-      vi.mocked(auth.getProviderModel).mockReturnValue('MiniMax-M2.5');
-      process.env['DRILL_API_KEY'] = 'env-key-123';
-
-      await statusCommand();
-
-      const output = consoleOutput.join('');
-      expect(output).toContain('Drill Status');
-      expect(output).toContain('minimax');
-    });
-
-    it('shows remaining runs warning when low', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue({
-        apiKey: 'key', apiUrl: 'https://api.drill.dev', plan: 'free', runCount: 18, runLimit: 20,
-        provider: 'minimax', providerModel: 'MiniMax-M2.5', model: 'cloud', localModel: undefined,
-        redact: true, customUrl: undefined,
-      });
-      vi.mocked(auth.hasStoredAuth).mockReturnValue(true);
-
-      await statusCommand();
-
-      expect(consoleOutput.join('')).toContain('remaining');
+      expect(output).toContain('Drill status');
+      expect(output).toContain('test@example.com');
     });
   });
 
@@ -204,22 +200,34 @@ describe('commands', () => {
       console.log = originalLog;
     });
 
-    it('clears auth and confirms when logged in', async () => {
-      vi.mocked(auth.hasStoredAuth).mockReturnValue(true);
+    it('clears auth when logged in', async () => {
+      vi.mocked(auth.loadAuth).mockReturnValue({
+        supabaseToken: 'test-token',
+        supabaseUserId: 'test-user-id',
+        apiKey: 'test',
+        apiUrl: 'https://api.drill.dev',
+        plan: 'free',
+        runCount: 0,
+        runLimit: 100,
+        provider: 'minimax',
+        providerModel: 'MiniMax-M2.5',
+        model: 'cloud' as const,
+        localModel: undefined,
+        redact: true,
+        customUrl: undefined,
+      });
 
       await logoutCommand();
 
-      expect(vi.mocked(auth.clearAuth)).toHaveBeenCalledOnce();
-      expect(consoleOutput.join('')).toContain('Logged out');
+      expect(vi.mocked(auth.clearSessionAuth)).toHaveBeenCalledOnce();
     });
 
-    it('shows message when not logged in', async () => {
-      vi.mocked(auth.hasStoredAuth).mockReturnValue(false);
+    it('does not clear session state when not logged in', async () => {
+      vi.mocked(auth.loadAuth).mockReturnValue(null);
 
       await logoutCommand();
 
-      expect(vi.mocked(auth.clearAuth)).toHaveBeenCalledOnce();
-      expect(consoleOutput.join('')).toContain('No stored authentication');
+      expect(vi.mocked(auth.clearSessionAuth)).not.toHaveBeenCalled();
     });
   });
 });

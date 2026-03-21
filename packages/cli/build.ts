@@ -17,6 +17,8 @@ async function main() {
     define: {
       __VERSION__: JSON.stringify(pkg.version),
       __ANON_KEY__: JSON.stringify(process.env['DRILL_ANON_KEY'] ?? ''),
+      __SUPABASE_URL__:  JSON.stringify(process.env['SUPABASE_URL']       ?? ''),
+      __SUPABASE_ANON__: JSON.stringify(process.env['SUPABASE_ANON_KEY'] ?? ''),
     },
     external: [
       'fsevents',
@@ -30,6 +32,7 @@ async function main() {
       'zod',
       'open',
       'glob',
+      'node-machine-id',
     ],
     minify: process.env['NODE_ENV'] === 'production',
     sourcemap: process.env['NODE_ENV'] !== 'production',

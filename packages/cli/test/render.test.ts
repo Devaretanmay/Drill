@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   showThinking, showResult, showError, showInputInfo, showRedactStats,
 } from '../src/lib/render';
-import type { DrillResult, DrillError } from '../src/types';
+import type { DrillResult } from '../src/types';
 
 const mockResult: DrillResult = {
   cause: 'Database connection pool exhausted due to high concurrent load',

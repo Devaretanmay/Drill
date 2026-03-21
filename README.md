@@ -147,18 +147,18 @@ cat error.log | drill --json | jq .cause
 
 Drill works with any of these. Run `drill setup` to configure interactively.
 
-| Provider | Env variable | Recommended model | Free tier |
-|---|---|---|---|
-| OpenAI | `OPENAI_API_KEY` | `gpt-4o` | — |
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` | — |
-| Groq | `GROQ_API_KEY` | `llama-3.1-70b-versatile` | ✓ |
-| Mistral | `MISTRAL_API_KEY` | `mistral-large` | — |
-| MiniMax | `MINIMAX_API_KEY` | `MiniMax-M2.5` | — |
-| Together AI | `TOGETHER_API_KEY` | `MiniMaxAI/MiniMax-M2.5` | — |
-| Ollama (local) | none needed | `qwen2.5-coder:7b` | ✓ fully local |
-| Custom endpoint | `CUSTOM_API_KEY` | any OpenAI-compatible | — |
+| Provider | Env variable |
+|---|---|
+| OpenAI | `OPENAI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| Mistral | `MISTRAL_API_KEY` |
+| MiniMax | `MINIMAX_API_KEY` |
+| Together AI | `TOGETHER_API_KEY` |
+| Ollama (local) | none |
+| Custom endpoint | `CUSTOM_API_KEY` |
 
-> **No API key?** Groq offers a generous free tier. Sign up at [console.groq.com](https://console.groq.com) in 2 minutes.
+After entering your API key, `drill setup` fetches the available models from that provider and shows a numbered list to choose from.
 
 ---
 

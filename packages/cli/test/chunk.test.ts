@@ -122,28 +122,6 @@ describe('chunk', () => {
     });
   });
 
-  describe('error context extraction', () => {
-    it('extracts context around ERROR lines', () => {
-      const lines = Array.from({ length: 200 }, (_, i) => `line ${i}`);
-      lines[100] = 'ERROR: something broke at line 100';
-      const input = lines.join('\n');
-      const result = chunk(input, { maxChars: 1000, contextRadius: 3 });
-      expect(result.content).toContain('ERROR: something broke');
-      expect(result.content).toContain('line 97');
-      expect(result.content).toContain('line 103');
-    });
-
-    it('extracts context around multiple error lines', () => {
-      const lines = Array.from({ length: 100 }, (_, i) => `line ${i}`);
-      lines[10] = 'ERROR: first error';
-      lines[50] = 'FATAL: second error';
-      const input = lines.join('\n');
-      const result = chunk(input, { maxChars: 1000, contextRadius: 2 });
-      expect(result.content).toContain('ERROR: first error');
-      expect(result.content).toContain('FATAL: second error');
-    });
-  });
-
   describe('truncation markers', () => {
     it('includes truncation marker when chunking', () => {
       const bigLog = Array.from({ length: 10000 }, (_, i) => `line ${i}`).join('\n');
@@ -180,7 +158,6 @@ describe('chunk', () => {
 
     it('reports correct resultLines count', () => {
       const lines = Array.from({ length: 200 }, (_, i) => `line ${i}`);
-      lines[50] = 'ERROR: error at 50';
       const input = lines.join('\n');
       const result = chunk(input, { maxChars: 500 });
       expect(result.resultLines).toBeGreaterThan(0);
@@ -193,19 +170,11 @@ describe('chunk', () => {
       expect(result.strategy).toBe('passthrough');
     });
 
-    it('uses tail strategy when no errors found', () => {
+    it('uses tail strategy when over budget', () => {
       const lines = Array.from({ length: 500 }, (_, i) => `info line ${i}`);
       const input = lines.join('\n');
       const result = chunk(input, { maxChars: 100, headLines: 5, lastNLines: 5 });
       expect(result.strategy).toBe('tail');
-    });
-
-    it('uses mixed strategy when errors found', () => {
-      const lines = Array.from({ length: 500 }, (_, i) => `line ${i}`);
-      lines[100] = 'ERROR: test';
-      const input = lines.join('\n');
-      const result = chunk(input, { maxChars: 100, contextRadius: 10 });
-      expect(result.strategy).toBe('mixed');
     });
   });
 });

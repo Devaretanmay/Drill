@@ -180,8 +180,6 @@ function scoreFiles(files: string[], keywords: string[]): ContextFile[] {
     return files.slice(0, 20).map(f => ({ path: f, content: '', relevanceScore: 0 }));
   }
 
-  const keywordSet = new Set(keywords.map(k => k.toLowerCase()));
-
   const scored: ContextFile[] = [];
 
   for (const file of files) {
@@ -200,8 +198,6 @@ function scoreFiles(files: string[], keywords: string[]): ContextFile[] {
     // Try to read file content for scoring
     try {
       const content = readFileSync(file, 'utf8').slice(0, 10000);
-      const contentLower = content.toLowerCase();
-      
       for (const kw of keywords) {
         const kwl = kw.toLowerCase();
         const regex = new RegExp(`\\b${escapeRegex(kwl)}\\b`, 'gi');

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as readline from 'node:readline';
 import { updateAuth, loadAuth, clearAuth } from '../../src/lib/auth';
 import { VALID_PROVIDERS } from '../../src/lib/providers';
 
@@ -18,6 +17,27 @@ vi.mock('chalk', () => ({
   },
 }));
 
+vi.mock('ora', () => ({
+  default: () => ({
+    start: () => ({ succeed: () => {}, fail: () => {} }),
+  }),
+}));
+
+const defaultModels = ['model-a', 'model-b'];
+vi.mock('../../src/lib/models', () => ({
+  fetchModels: vi.fn().mockImplementation((provider: string) => {
+    if (provider === 'custom') return Promise.resolve([]);
+    return Promise.resolve(defaultModels);
+  }),
+  ModelFetchError: class extends Error {
+    code: string;
+    constructor(msg: string, code: string) {
+      super(msg);
+      this.code = code;
+    }
+  },
+}));
+
 const mockRl = {
   question: vi.fn(),
   close: vi.fn(),
@@ -29,8 +49,8 @@ vi.mock('node:readline', () => ({
 
 describe('setup auth integration', () => {
   beforeEach(() => {
-    clearAuth();
     process.env['DRILL_CONFIG_DIR'] = '/tmp/drill-test-setup';
+    clearAuth();
   });
 
   afterEach(() => {
@@ -124,9 +144,10 @@ describe('setup command exports', () => {
 
 describe('setupCommand interactive flow', () => {
   beforeEach(() => {
-    clearAuth();
     process.env['DRILL_CONFIG_DIR'] = '/tmp/drill-test-setup-interactive';
+    clearAuth();
     vi.clearAllMocks();
+    mockRl.close.mockClear();
   });
 
   afterEach(() => {
@@ -146,10 +167,13 @@ describe('setupCommand interactive flow', () => {
     resolveQuestion!('1');
     await new Promise(r => setTimeout(r, 0));
     resolveQuestion!('sk-test-key');
+    await new Promise(r => setTimeout(r, 0));
+    resolveQuestion!('1');
     await runPromise;
 
     const auth = loadAuth();
     expect(auth?.provider).toBe('openai');
+    expect(auth?.providerModel).toBe('model-a');
   });
 
   it('selects Ollama provider (no API key)', async () => {
@@ -183,13 +207,15 @@ describe('setupCommand interactive flow', () => {
     resolveQuestion!('6');
     await new Promise(r => setTimeout(r, 0));
     resolveQuestion!('minimax-key');
+    await new Promise(r => setTimeout(r, 0));
+    resolveQuestion!('1');
     await runPromise;
 
     const auth = loadAuth();
     expect(auth?.provider).toBe('minimax');
   });
 
-  it('selects Custom provider with URL', async () => {
+  it('selects Custom provider with URL and manual model entry', async () => {
     const { setupCommand } = await import('../../src/commands/setup');
 
     let resolveQuestion: (value: string) => void;
@@ -204,10 +230,13 @@ describe('setupCommand interactive flow', () => {
     resolveQuestion!('https://my-endpoint.com/v1');
     await new Promise(r => setTimeout(r, 0));
     resolveQuestion!('custom-key');
+    await new Promise(r => setTimeout(r, 0));
+    resolveQuestion!('my-custom-model');
     await runPromise;
 
     const auth = loadAuth();
     expect(auth?.provider).toBe('custom');
     expect(auth?.customUrl).toBe('https://my-endpoint.com/v1');
+    expect(auth?.providerModel).toBe('my-custom-model');
   });
 });

@@ -1,26 +1,28 @@
 /**
  * Logout Command Module
- * 
+ *
  * Clears stored authentication from ~/.drill/config.
+ * Signs out from Supabase if token exists.
  */
 
 import chalk from 'chalk';
-import { clearAuth, hasStoredAuth } from '../lib/auth.js';
+import { clearSessionAuth, loadAuth } from '../lib/auth.js';
+import { authedClient } from '../lib/supabase.js';
 
-/**
- * Executes the logout flow: clears auth config and confirms.
- */
 export async function logoutCommand(): Promise<void> {
-  const wasLoggedIn = hasStoredAuth();
-  
-  clearAuth();
+  const config = loadAuth();
 
-  if (wasLoggedIn) {
-    console.log(`\n  ${chalk.green('✓')} ${chalk.bold('Logged out successfully.')}`);
-    console.log(`  Your authentication token has been removed from this machine.\n`);
-    console.log(`  ${chalk.dim('To use Drill again, run "drill login" or set DRILL_API_KEY.\n')}`);
-  } else {
-    console.log(`\n  ${chalk.dim('No stored authentication found.')}\n`);
-    console.log(`  ${chalk.dim('To use Drill, run "drill login" or set DRILL_API_KEY.\n')}`);
+  if (!config?.supabaseToken || !config?.supabaseUserId) {
+    console.log(chalk.dim('\n  Logged out.\n'));
+    return;
   }
+
+  try {
+    await authedClient(config.supabaseToken).auth.signOut();
+  } catch {
+    // Ignore — clear local session regardless
+  }
+
+  clearSessionAuth();
+  console.log(chalk.dim('\n  Logged out.\n'));
 }

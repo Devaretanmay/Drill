@@ -2,72 +2,60 @@
  * Status Command Module
  *
  * Shows current authentication status, plan info, and provider config.
+ * Fetches live data from Supabase when authenticated.
  */
 
 import chalk from 'chalk';
-import { loadAuth, maskKey, hasStoredAuth, getProvider, getProviderModel } from '../lib/auth.js';
-import { getProviderApiKey, getProviderEnvVar } from '../lib/providers.js';
+import { loadAuth, getProvider, getProviderModel } from '../lib/auth.js';
+import { authedClient } from '../lib/supabase.js';
 
-/**
- * Shows current auth status and plan info from local cache.
- */
 export async function statusCommand(): Promise<void> {
-  const auth = loadAuth();
-  const hasKey = hasStoredAuth();
-  const envKey = process.env['DRILL_API_KEY'];
+  const config = loadAuth();
+
+  if (!config?.supabaseToken || !config?.supabaseUserId) {
+    console.log(chalk.yellow('\n  Not logged in. Run: drill login\n'));
+    return;
+  }
+
+  let runsWeek = config.runsWeek ?? 0;
+  let plan = config.plan ?? 'free';
+  let weekReset = config.weekReset ?? '';
+
+  try {
+    const { data } = await authedClient(config.supabaseToken)
+      .from('users')
+      .select('runs_week, week_reset, plan')
+      .eq('id', config.supabaseUserId)
+      .single();
+
+    if (data) {
+      runsWeek  = data.runs_week;
+      plan      = data.plan;
+      weekReset = data.week_reset;
+    }
+  } catch {
+    // Use cached values if offline
+  }
+
+  const limit  = plan === 'free' ? 100 : 999999;
+  const pct    = Math.min(100, Math.round((runsWeek / limit) * 100));
+  const bar    = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
+  const reset  = weekReset
+    ? new Date(weekReset).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    : 'Unknown';
+
   const provider = getProvider();
   const providerModel = getProviderModel();
 
-  console.log(`\n  ${chalk.bold('Drill Status')}\n`);
-
-  // Provider section
-  console.log(`  ${chalk.bold('Provider:')}`);
-  console.log(`    ${chalk.cyan(provider.padEnd(12))} (${chalk.dim(providerModel)})`);
-
-  if (provider === 'ollama') {
-    console.log(`  ${chalk.dim('  Local model — no API key needed.')}`);
-    console.log(`  ${chalk.dim('  Check if running:')} ${chalk.cyan('ollama serve')}\n`);
-  } else {
-    const envVar = getProviderEnvVar(provider);
-    console.log(`  ${chalk.dim(`  Env var: ${envVar}`)}`);
+  console.log('\n' + chalk.bold('  Drill status'));
+  console.log(chalk.dim('  ─────────────────────────────'));
+  console.log(`  Email:     ${config.email ?? 'unknown'}`);
+  console.log(`  Plan:      ${chalk.bold(plan)}`);
+  console.log(`  Usage:     ${bar} ${runsWeek}/${limit === 999999 ? '∞' : limit} this week`);
+  console.log(`  Resets:    ${reset}`);
+  console.log(`  Provider:  ${provider ? chalk.cyan(provider) : chalk.dim('not configured — run drill setup')}`);
+  if (providerModel) {
+    console.log(`  Model:     ${providerModel}`);
   }
-
-  console.log('');
-
-  // API Key section
-  console.log(`  ${chalk.bold('API Key:')}`);
-  const configKey = auth?.apiKey ?? '';
-  const providerKey = configKey || envKey || '';
-
-  if (providerKey) {
-    console.log(`    ${chalk.green('✓')} ${chalk.dim(maskKey(providerKey))}`);
-    console.log(`    Source: ${chalk.dim(hasKey && configKey ? '~/.drill/config' : envKey ? 'DRILL_API_KEY' : '~/.drill/config')}`);
-  } else {
-    console.log(`    ${chalk.red('✗')} No API key found`);
-    const envVar = getProviderEnvVar(provider);
-    if (envVar) {
-      console.log(`  ${chalk.dim(`  Set ${envVar} in your environment, or run`)}`);
-      console.log(`  ${chalk.cyan('  drill setup')}`);
-    }
-  }
-
-  console.log('');
-
-  // Plan section
-  if (auth) {
-    console.log(`  ${chalk.bold('Plan:')} ${chalk.bold(auth.plan)}`);
-
-    const remaining = Math.max(0, auth.runLimit - auth.runCount);
-    if (remaining <= 5) {
-      console.log(`  ${chalk.yellow(`  Runs: ${auth.runCount}/${auth.runLimit} (${remaining} remaining)`)}`);
-    } else {
-      console.log(`    Runs: ${chalk.dim(`${auth.runCount}/${auth.runLimit} (${remaining} remaining)`)}`);
-    }
-    console.log(`  ${chalk.dim('  (Run counts are cached locally)')}`);
-  } else {
-    console.log(`  ${chalk.bold('Plan:')} ${chalk.dim('unknown')}`);
-    console.log(`  ${chalk.dim('  Run "drill login" to link your account.')}`);
-  }
-
-  console.log('\n');
+  console.log(chalk.dim('  ─────────────────────────────\n'));
 }

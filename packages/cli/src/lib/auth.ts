@@ -7,7 +7,9 @@
 
 import Conf from 'conf';
 import os from 'node:os';
+import chalk from 'chalk';
 import type { ProviderName } from '../types.js';
+import { authedClient } from './supabase.js';
 
 export interface DrillAuthData {
   apiKey: string;
@@ -21,6 +23,13 @@ export interface DrillAuthData {
   localModel: string | undefined;
   redact: boolean;
   customUrl: string | undefined;
+  // Supabase auth fields
+  supabaseToken?: string;
+  supabaseUserId?: string;
+  email?: string;
+  runsWeek?: number;
+  weekLimit?: number;
+  weekReset?: string;
 }
 
 interface DrillConfSchema {
@@ -107,6 +116,24 @@ export function clearAuth(): void {
 }
 
 /**
+ * Clears only the Supabase session fields while preserving provider setup.
+ */
+export function clearSessionAuth(): void {
+  const auth = loadAuth();
+  if (!auth) return;
+
+  const { supabaseToken, supabaseUserId, email, runsWeek, weekLimit, weekReset, ...rest } = auth;
+  void supabaseToken;
+  void supabaseUserId;
+  void email;
+  void runsWeek;
+  void weekLimit;
+  void weekReset;
+
+  saveAuth(rest);
+}
+
+/**
  * Gets the API key to use for requests.
  * Precedence: 1) ~/.drill/config → 2) DRILL_API_KEY env var → empty string
  */
@@ -184,4 +211,87 @@ export function getProvider(): ProviderName {
 export function getProviderModel(): string {
   const auth = loadAuth();
   return auth?.providerModel ?? 'MiniMax-M2.5';
+}
+
+/**
+ * Returns true if a valid Supabase token is stored in config.
+ */
+export function isAuthenticated(): boolean {
+  const config = loadAuth();
+  return !!config?.supabaseToken && !!config?.supabaseUserId;
+}
+
+/**
+ * Returns stored token or null.
+ */
+export function getSupabaseToken(): string | null {
+  return loadAuth()?.supabaseToken ?? null;
+}
+
+/**
+ * Checks run limit and increments counter atomically via Supabase RPC.
+ * Fails open on network error (allows the run) to not block users.
+ * Returns current state after increment.
+ */
+export async function checkAndIncrementRun(): Promise<{
+  allowed: boolean;
+  runsWeek: number;
+  limit: number;
+  weekReset: string;
+}> {
+  const config = loadAuth();
+  const token  = config?.supabaseToken;
+  const userId = config?.supabaseUserId;
+  const limit  = config?.weekLimit ?? 100;
+
+  if (!token || !userId) {
+    return { allowed: false, runsWeek: 0, limit, weekReset: '' };
+  }
+
+  try {
+    const client = authedClient(token);
+    const { data, error } = await client.rpc('increment_run_count', {
+      user_id: userId,
+    });
+
+    if (error) throw error;
+
+    const result = data as {
+      runs_week: number;
+      plan: string;
+      limit: number;
+      over_limit: boolean;
+    };
+
+    const updatedAuth: DrillAuthData = {
+      apiKey: config?.apiKey ?? '',
+      apiUrl: config?.apiUrl ?? '',
+      plan: result.plan,
+      runCount: config?.runCount ?? 0,
+      runLimit: config?.runLimit ?? 20,
+      model: config?.model ?? 'cloud',
+      localModel: config?.localModel,
+      redact: config?.redact ?? true,
+      provider: config?.provider ?? 'minimax',
+      providerModel: config?.providerModel ?? '',
+      customUrl: config?.customUrl,
+      supabaseToken: token,
+      supabaseUserId: userId,
+      email: config?.email ?? '',
+      runsWeek: result.runs_week,
+      weekLimit: result.limit,
+      weekReset: config?.weekReset ?? '',
+    };
+    saveAuth(updatedAuth as DrillAuthData);
+
+    return {
+      allowed: !result.over_limit,
+      runsWeek: result.runs_week,
+      limit: result.limit,
+      weekReset: config?.weekReset ?? '',
+    };
+  } catch {
+    console.warn(chalk.dim('  (offline — run not counted)\n'));
+    return { allowed: true, runsWeek: config?.runsWeek ?? 0, limit, weekReset: '' };
+  }
 }

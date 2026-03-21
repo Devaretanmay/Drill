@@ -37,7 +37,6 @@ export async function parseStream(
   }
 
   let inThink = false;
-  let thinkBuffer = '';
   let resultBuffer = '';
 
   const parser = createParser({
@@ -75,17 +74,14 @@ export async function parseStream(
           const thinkEnd = delta.indexOf('</think>', i);
           if (thinkEnd === -1) {
             const thinkContent = delta.slice(i);
-            thinkBuffer += thinkContent;
             handlers.onThinking(thinkContent);
             break;
           } else {
             const thinkContent = delta.slice(i, thinkEnd);
             if (thinkContent) {
-              thinkBuffer += thinkContent;
               handlers.onThinking(thinkContent);
             }
             inThink = false;
-            thinkBuffer = '';
             i = thinkEnd + '</think>'.length;
           }
         }

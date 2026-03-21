@@ -1,19 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runCommand } from '../../src/commands/run';
-
-const mockAuth = {
-  apiKey: 'test-key',
-  apiUrl: 'https://api.drill.dev',
-  plan: 'free' as const,
-  runCount: 0,
-  runLimit: 20,
-  provider: 'minimax' as const,
-  providerModel: 'MiniMax-M2.5',
-  model: 'cloud' as const,
-  localModel: undefined as string | undefined,
-  redact: true,
-  customUrl: undefined as string | undefined,
-};
 
 vi.mock('../../src/lib/auth', () => ({
   loadAuth: vi.fn().mockReturnValue({
@@ -28,9 +14,22 @@ vi.mock('../../src/lib/auth', () => ({
     localModel: undefined,
     redact: true,
     customUrl: undefined,
+    supabaseToken: 'test-token',
+    supabaseUserId: 'test-user-id',
+    email: 'test@example.com',
+    runsWeek: 5,
+    weekLimit: 100,
+    weekReset: '2029-01-01',
   }),
   getApiKey: vi.fn().mockReturnValue('test-key'),
   getApiUrl: vi.fn().mockReturnValue('https://api.drill.dev'),
+  isAuthenticated: vi.fn().mockReturnValue(true),
+  checkAndIncrementRun: vi.fn().mockResolvedValue({
+    allowed: true,
+    runsWeek: 5,
+    limit: 100,
+    weekReset: '2029-01-01',
+  }),
 }));
 
 vi.mock('../../src/lib/context', () => ({
@@ -185,6 +184,22 @@ describe('runCommand', () => {
     expect(callArg.timeoutMs).toBe(120000);
   });
 
+  it('routes local runs to Ollama and applies model override', async () => {
+    const { analyze } = await import('../../src/lib/api');
+    await runCommand('test error', { local: true, model: 'qwen2.5:latest' });
+    expect(analyze).toHaveBeenCalledOnce();
+    const callArg = (analyze as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.providerOverride).toBe('ollama');
+    expect(callArg.providerModelOverride).toBe('qwen2.5:latest');
+  });
+
+  it('exits when --model is used without --local', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    await runCommand('test error', { model: 'qwen2.5:latest' });
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
   it('outputs JSON with error on DrillError in --json mode', async () => {
     const { analyze } = await import('../../src/lib/api');
     (analyze as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -213,5 +228,29 @@ describe('runCommand', () => {
     expect(exitSpy).not.toHaveBeenCalled();
     expect(analyze).toHaveBeenCalled();
     exitSpy.mockRestore();
+  });
+
+  it('passes deduped content to analyze — repeated lines collapsed', async () => {
+    const repeatedLog = Array(20).fill('ERROR: ECONNREFUSED 127.0.0.1:5432').join('\n');
+    const { analyze } = await import('../../src/lib/api');
+    await runCommand(repeatedLog, {});
+    const callArg = (analyze as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.input).toContain('[×20]');
+    expect(callArg.input.split('\n').length).toBe(1);
+  });
+
+  it('passes filtered content to analyze — INFO spam removed', async () => {
+    const noisyLog = [
+      ...Array(50).fill('INFO: health check ok'),
+      'ERROR: database connection refused',
+      ...Array(50).fill('INFO: health check ok'),
+    ].join('\n');
+    const { analyze } = await import('../../src/lib/api');
+    await runCommand(noisyLog, {});
+    const callArg = (analyze as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.input).toContain('ERROR: database connection refused');
+    const infoCount = callArg.input.split('\n')
+      .filter((l: string) => l.startsWith('INFO: health')).length;
+    expect(infoCount).toBeLessThan(10);
   });
 });

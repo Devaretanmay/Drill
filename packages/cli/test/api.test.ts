@@ -3,7 +3,7 @@ import { analyze } from '../src/lib/api';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { loadAuth } from '../src/lib/auth';
-import { getProviderApiKey, getAdapter } from '../src/lib/providers';
+import { getProviderApiKey } from '../src/lib/providers';
 
 vi.mock('../src/lib/auth', () => ({
   loadAuth: vi.fn(),
@@ -78,6 +78,22 @@ describe('api', () => {
       expect(result).toMatchObject({
         code: 'NO_KEY',
         message: 'No API key configured. Set OPENAI_API_KEY in your environment.',
+      });
+    });
+
+    it('uses stored config apiKey when provider env var is empty', async () => {
+      vi.mocked(getProviderApiKey).mockImplementation((config) => config.apiKey);
+      server.use(
+        http.post('https://api.minimax.io/v1/chat/completions', ({ request }) => {
+          expect(request.headers.get('authorization')).toBe('Bearer test-key');
+          return HttpResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        })
+      );
+
+      const result = await analyze({ input: 'test error' });
+
+      expect(result).toMatchObject({
+        code: 'INVALID_KEY',
       });
     });
 

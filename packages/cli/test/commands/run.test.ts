@@ -14,8 +14,7 @@ vi.mock('../../src/lib/auth', () => ({
     localModel: undefined,
     redact: true,
     customUrl: undefined,
-    supabaseToken: 'test-token',
-    supabaseUserId: 'test-user-id',
+    registered: true,
     email: 'test@example.com',
     runsWeek: 5,
     weekLimit: 100,
@@ -23,12 +22,15 @@ vi.mock('../../src/lib/auth', () => ({
   }),
   getApiKey: vi.fn().mockReturnValue('test-key'),
   getApiUrl: vi.fn().mockReturnValue('https://api.drill.dev'),
-  isAuthenticated: vi.fn().mockReturnValue(true),
-  checkAndIncrementRun: vi.fn().mockResolvedValue({
+}));
+
+vi.mock('../../src/lib/identity', () => ({
+  checkAndCount: vi.fn().mockResolvedValue({
     allowed: true,
+    registered: true,
     runsWeek: 5,
     limit: 100,
-    weekReset: '2029-01-01',
+    plan: 'free',
   }),
 }));
 
@@ -57,13 +59,12 @@ vi.mock('../../src/lib/api', () => ({
 }));
 
 vi.mock('../../src/lib/render', () => ({
-  startSpinner: vi.fn(),
-  stopSpinner: vi.fn(),
   showThinking: vi.fn(),
   showResult: vi.fn(),
   showError: vi.fn(),
   showInputInfo: vi.fn(),
   showRedactStats: vi.fn(),
+  clearThinking: vi.fn(),
 }));
 
 describe('runCommand', () => {
@@ -141,21 +142,22 @@ describe('runCommand', () => {
 
   it('shows error and exits 1 on DrillError', async () => {
     const { analyze } = await import('../../src/lib/api');
-    const { showError } = await import('../../src/lib/render');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     (analyze as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       code: 'NETWORK',
       message: 'Connection failed',
     });
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     await runCommand('test error', {});
-    expect(showError).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
+    errorSpy.mockRestore();
     exitSpy.mockRestore();
   });
 
   it('shows error and exits 2 on LIMIT_REACHED', async () => {
     const { analyze } = await import('../../src/lib/api');
-    const { showError } = await import('../../src/lib/render');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     (analyze as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       code: 'LIMIT_REACHED',
       message: 'Run limit reached',
@@ -163,8 +165,9 @@ describe('runCommand', () => {
     });
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     await runCommand('test error', {});
-    expect(showError).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(2);
+    errorSpy.mockRestore();
     exitSpy.mockRestore();
   });
 

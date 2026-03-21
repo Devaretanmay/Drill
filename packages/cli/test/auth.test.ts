@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { saveAuth, clearAuth, getApiKey, hasStoredAuth, getApiUrl, getPlanInfo, maskKey } from '../src/lib/auth';
+import { saveAuth, clearAuth, getApiKey, hasStoredAuth, getApiUrl, maskKey } from '../src/lib/auth';
 import Conf from 'conf';
 
 vi.mock('conf');
@@ -94,22 +94,6 @@ describe('auth', () => {
     });
   });
 
-  describe('getPlanInfo', () => {
-    it('returns plan info from config', () => {
-      mockStore.get.mockReturnValueOnce({ apiKey: 'key', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 10, runLimit: 100 });
-      
-      const info = getPlanInfo();
-      expect(info).toEqual({ plan: 'pro', runCount: 10, runLimit: 100 });
-    });
-
-    it('returns defaults when no auth', () => {
-      mockStore.get.mockReturnValueOnce(null);
-      
-      const info = getPlanInfo();
-      expect(info).toEqual({ plan: 'unknown', runCount: 0, runLimit: 20 });
-    });
-  });
-
   describe('maskKey', () => {
     it('masks long keys', () => {
       expect(maskKey('abcdefghijklmnop')).toBe('abcd***mnop');
@@ -128,18 +112,28 @@ describe('auth', () => {
 
   describe('saveAuth', () => {
     it('saves auth data to config', () => {
-      const data = { apiKey: 'new-key', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 0, runLimit: 100 };
-      
+      const data = {
+        email: 'test@example.com',
+        registered: true,
+        plan: 'free',
+        weekLimit: 100,
+      };
+
       saveAuth(data);
-      
-      expect(mockStore.set).toHaveBeenCalledWith('auth', data);
+
+      expect(mockStore.set).toHaveBeenCalledWith('auth', expect.objectContaining({
+        email: 'test@example.com',
+        registered: true,
+        plan: 'free',
+        weekLimit: 100,
+      }));
     });
   });
 
   describe('clearAuth', () => {
     it('deletes auth from config', () => {
       clearAuth();
-      
+
       expect(mockStore.delete).toHaveBeenCalledWith('auth');
     });
   });

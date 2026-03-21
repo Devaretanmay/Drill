@@ -6,6 +6,16 @@ vi.mock('node:dns/promises', () => ({
   lookup: vi.fn().mockResolvedValue('127.0.0.1'),
 }));
 
+vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+  if (url.includes('localhost:11434')) {
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ models: [{ name: 'llama3.2' }] }),
+    } as Response);
+  }
+  return Promise.resolve({ ok: false, status: 500 } as Response);
+}));
+
 vi.mock('chalk', () => ({
   default: {
     bold: (s: string) => s,
@@ -188,6 +198,7 @@ describe('setupCommand interactive flow', () => {
 
     resolveQuestion!('5');
     await new Promise(r => setTimeout(r, 0));
+    resolveQuestion!('');
     await runPromise;
 
     const auth = loadAuth();

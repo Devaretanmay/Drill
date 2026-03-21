@@ -17,7 +17,7 @@ import { watch as fsWatch, type FSWatcher } from 'chokidar';
 import chalk from 'chalk';
 import { preprocess } from '../lib/preprocess.js';
 import { analyze } from '../lib/api.js';
-import { stopSpinner, showThinking, showResult, showError } from '../lib/render.js';
+import { showThinking, showResult, showError } from '../lib/render.js';
 import { getApiKey, loadAuth } from '../lib/auth.js';
 import type { DrillError } from '../types.js';
 
@@ -134,10 +134,6 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
       return;
     }
     const finalInput = preprocessed.content;
-
-    if (!options.json) {
-      stopSpinner();
-    }
 
     let thinkingStarted = false;
 

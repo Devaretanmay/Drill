@@ -1,11 +1,13 @@
 import { Command } from 'commander';
 import { runCommand } from './commands/run.js';
+import { registerCommand } from './commands/register.js';
 import { loginCommand } from './commands/login.js';
 import { logoutCommand } from './commands/logout.js';
 import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
 import { watchCommand } from './commands/watch.js';
 import { setupCommand } from './commands/setup.js';
+import { openUpgradePage } from './lib/upgrade.js';
 import type { WatchOptions } from './commands/watch.js';
 
 declare const __VERSION__: string;
@@ -44,24 +46,38 @@ program
   });
 
 program
+  .command('register')
+  .description('Create your free Drill account')
+  .action(async () => {
+    await registerCommand();
+  });
+
+program
   .command('login')
-  .description('Authenticate with drill.dev to unlock your account')
+  .description('Alias for drill register')
   .action(async () => {
     await loginCommand();
   });
 
 program
   .command('logout')
-  .description('Remove stored authentication token')
+  .description('Clear your stored configuration')
   .action(async () => {
     await logoutCommand();
   });
 
 program
   .command('status')
-  .description('Show current plan, run count, and API key status')
+  .description('Show current plan, run count, and usage')
   .action(async () => {
     await statusCommand();
+  });
+
+program
+  .command('upgrade')
+  .description('Upgrade your plan to unlock more analyses')
+  .action(async () => {
+    await openUpgradePage();
   });
 
 const configCmd = program

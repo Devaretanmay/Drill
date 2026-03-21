@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   showThinking, showResult, showError, showInputInfo, showRedactStats,
+  clearThinking,
 } from '../src/lib/render';
 import type { DrillResult } from '../src/types';
 
@@ -61,13 +62,7 @@ describe('render', () => {
     it('does not show alternative when null', () => {
       showResult({ ...mockResult, alternative: null });
       const output = consoleOutput.join('\n');
-      expect(output).not.toContain('Alternative:');
-    });
-
-    it('shows remaining count when provided', () => {
-      showResult(mockResult, 3);
-      const output = consoleOutput.join('\n');
-      expect(output).toContain('3 run');
+      expect(output).not.toContain('alt');
     });
 
     it('shows severity labels', () => {
@@ -76,12 +71,34 @@ describe('render', () => {
       expect(output).toContain('CRITICAL');
     });
 
-    it('shows evidence truncated at 120 chars', () => {
-      const longEvidence = 'x'.repeat(150);
+    it('shows evidence truncated at 80 chars', () => {
+      const longEvidence = 'x'.repeat(100);
       showResult({ ...mockResult, evidence: [longEvidence] });
       const output = consoleOutput.join('\n');
-      expect(output).toContain('...');
-      expect(output).not.toContain(longEvidence);
+      expect(output).toContain('xxxx');
+      expect(output).not.toContain('xxxxxxxxxx'.repeat(9));
+    });
+
+    it('shows footer with meta', () => {
+      showResult(mockResult, { provider: 'openai', model: 'gpt-4o', elapsedMs: 2340 });
+      const output = consoleOutput.join('\n');
+      expect(output).toContain('drill');
+      expect(output).toContain('openai');
+      expect(output).toContain('gpt-4o');
+      expect(output).toContain('2s');
+    });
+
+    it('shows missing when confidence < 60', () => {
+      showResult({ ...mockResult, confidence: 50, missing: 'Need stack trace' });
+      const output = consoleOutput.join('\n');
+      expect(output).toContain('needs');
+      expect(output).toContain('Need stack trace');
+    });
+
+    it('does not show missing when confidence >= 60', () => {
+      showResult({ ...mockResult, missing: 'Need stack trace' });
+      const output = consoleOutput.join('\n');
+      expect(output).not.toContain('needs');
     });
   });
 
@@ -94,75 +111,110 @@ describe('render', () => {
       expect(() => showThinking('   \n  ')).not.toThrow();
     });
 
-    it('writes thinking lines to stdout without crashing', () => {
+    it('writes thinking to stdout using \\r', () => {
       const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-      showThinking('Analyzing the error...\nDatabase connection failed');
+      showThinking('Analyzing connection pool exhaustion pattern');
       expect(spy).toHaveBeenCalled();
+      const call = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(call).toContain('Analyzing');
+      expect(call).toContain('·');
       spy.mockRestore();
     });
 
-    it('skips empty lines in thinking output', () => {
+    it('truncates to 60 chars', () => {
       const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-      showThinking('step one\n\nstep two');
-      const output = spy.mock.calls.map(c => c[0]).join('');
-      expect(output).toContain('step one');
-      expect(output).toContain('step two');
+      const long = 'A'.repeat(100);
+      showThinking(long);
+      const call = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(call.length).toBeLessThan(100);
+      spy.mockRestore();
+    });
+
+    it('uses only first line of multiline input', () => {
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      showThinking('step one\nstep two\nstep three');
+      const call = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(call).toContain('step one');
+      expect(call).not.toContain('step two');
+      spy.mockRestore();
+    });
+  });
+
+  describe('clearThinking', () => {
+    it('writes spaces to clear the line', () => {
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      clearThinking();
+      const call = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(call).toContain('\r');
+      expect(call).toContain(' ');
       spy.mockRestore();
     });
   });
 
   describe('showError', () => {
-    let stderrOutput: string[] = [];
-    const originalError = console.error;
+    let stdoutOutput: string[] = [];
+    const originalLog = console.log;
 
     beforeEach(() => {
-      stderrOutput = [];
-      console.error = (...args: unknown[]) => { stderrOutput.push(args.join(' ')); };
+      stdoutOutput = [];
+      console.log = (...args: unknown[]) => { stdoutOutput.push(args.join(' ')); };
     });
 
     afterEach(() => {
-      console.error = originalError;
+      console.log = originalLog;
     });
 
     it('shows INVALID_KEY message', () => {
       showError({ code: 'INVALID_KEY', message: 'bad key' });
-      expect(stderrOutput.join('\n')).toContain('Invalid API key');
+      expect(stdoutOutput.join('\n')).toContain('Invalid API key');
     });
 
     it('shows LIMIT_REACHED message with upgrade URL', () => {
       showError({ code: 'LIMIT_REACHED', message: 'limit', upgrade_url: 'https://drill.dev/upgrade' });
-      const output = stderrOutput.join('\n');
-      expect(output).toContain('limit');
+      const output = stdoutOutput.join('\n');
+      expect(output).toContain('Weekly limit reached');
       expect(output).toContain('drill.dev/upgrade');
+    });
+
+    it('shows LIMIT_REACHED without URL', () => {
+      showError({ code: 'LIMIT_REACHED', message: 'limit' });
+      const output = stdoutOutput.join('\n');
+      expect(output).toContain('Weekly limit reached');
     });
 
     it('shows PARSE_FAILED message', () => {
       showError({ code: 'PARSE_FAILED', message: 'bad json' });
-      expect(stderrOutput.join('\n')).toContain('parse');
+      expect(stdoutOutput.join('\n')).toContain('Analysis failed');
     });
 
-    it('shows REDACTED_EMPTY message with --no-redact hint', () => {
+    it('shows TIMEOUT message', () => {
+      showError({ code: 'TIMEOUT', message: '' });
+      const output = stdoutOutput.join('\n');
+      expect(output).toContain('timed out');
+    });
+
+    it('shows REDACTED_EMPTY message', () => {
       showError({ code: 'REDACTED_EMPTY', message: 'all redacted' });
-      const output = stderrOutput.join('\n');
+      const output = stdoutOutput.join('\n');
       expect(output).toContain('redacted');
       expect(output).toContain('--no-redact');
     });
 
-    it('shows NETWORK error', () => {
+    it('shows EMPTY_INPUT message', () => {
+      showError({ code: 'EMPTY_INPUT', message: '' });
+      expect(stdoutOutput.join('\n')).toContain('No input');
+    });
+
+    it('shows NETWORK error with message', () => {
       showError({ code: 'NETWORK', message: 'Connection refused' });
-      const output = stderrOutput.join('\n');
+      const output = stdoutOutput.join('\n');
       expect(output).toContain('Network error');
+      expect(output).toContain('Connection refused');
     });
 
     it('falls back to message for unknown error codes', () => {
       showError({ code: 'SERVER_ERROR', message: 'Internal server error' });
-      expect(stderrOutput.join('\n')).toContain('Internal server error');
-    });
-
-    it('shows INVALID_KEY with default message when no message provided', () => {
-      showError({ code: 'INVALID_KEY', message: '' });
-      const output = stderrOutput.join('\n');
-      expect(output).toContain('Invalid API key');
+      expect(stdoutOutput.join('\n')).toContain('Internal server error');
     });
   });
 
@@ -179,14 +231,24 @@ describe('render', () => {
       console.log = originalLog;
     });
 
-    it('shows line count when not chunked', () => {
-      showInputInfo(100, false);
-      expect(consoleOutput.join('')).toContain('100');
+    it('shows line count with deduped and signal lines', () => {
+      showInputInfo(847, 12, 3, false);
+      const output = consoleOutput.join('');
+      expect(output).toContain('847');
+      expect(output).toContain('deduped to 12');
+      expect(output).toContain('3 signal lines');
     });
 
-    it('shows truncated note when chunked', () => {
-      showInputInfo(1000, true);
-      expect(consoleOutput.join('')).toContain('truncated');
+    it('shows truncated message when wasChunked is true', () => {
+      showInputInfo(10000, 50, 5, true);
+      const output = consoleOutput.join('');
+      expect(output).toContain('truncated');
+    });
+
+    it('does not show truncated when wasChunked is false', () => {
+      showInputInfo(100, 95, 0, false);
+      const output = consoleOutput.join('');
+      expect(output).not.toContain('truncated');
     });
   });
 
@@ -216,8 +278,9 @@ describe('render', () => {
 
     it('shows single replacement correctly', () => {
       showRedactStats({ patternsMatched: { ip: 1 }, totalReplacements: 1, charsRemoved: 12 });
-      expect(consoleOutput.join('')).toContain('1');
-      expect(consoleOutput.join('')).toContain('12');
+      const output = consoleOutput.join('');
+      expect(output).toContain('1');
+      expect(output).toContain('12');
     });
   });
 });

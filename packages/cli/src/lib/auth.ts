@@ -2,14 +2,12 @@
  * Authentication & Config Module
  *
  * Manages API key storage and retrieval.
- * Precedence: 1) ~/.drill/config (from drill login) → 2) DRILL_API_KEY env var → 3) error
+ * Precedence: 1) ~/.drill/config (from drill register) → 2) DRILL_API_KEY env var → 3) empty
  */
 
 import Conf from 'conf';
 import os from 'node:os';
-import chalk from 'chalk';
 import type { ProviderName } from '../types.js';
-import { authedClient } from './supabase.js';
 
 export interface DrillAuthData {
   apiKey: string;
@@ -23,12 +21,11 @@ export interface DrillAuthData {
   localModel: string | undefined;
   redact: boolean;
   customUrl: string | undefined;
-  // Supabase auth fields
-  supabaseToken?: string;
-  supabaseUserId?: string;
+  // Registration fields
   email?: string;
-  runsWeek?: number;
+  registered?: boolean;
   weekLimit?: number;
+  runsWeek?: number;
   weekReset?: string;
 }
 
@@ -46,11 +43,6 @@ function getConfigStore(): Conf<DrillConfSchema> {
   });
 }
 
-/**
- * Loads auth data from ~/.drill/config.
- * Returns null if not authenticated.
- * Sets default provider to 'minimax' if none configured (backward compat).
- */
 export function loadAuth(): DrillAuthData | null {
   const store = getConfigStore();
   const raw = store.get('auth');
@@ -68,75 +60,65 @@ export function loadAuth(): DrillAuthData | null {
   return auth;
 }
 
-/**
- * Saves auth data to ~/.drill/config.
- * @param data Full auth data to save
- */
-export function saveAuth(data: DrillAuthData): void {
+export function saveAuth(data: Partial<DrillAuthData> & { email: string; registered: boolean; plan: string; weekLimit: number }): void {
   const store = getConfigStore();
-  store.set('auth', data);
+  const existing = loadAuth();
+  const merged = {
+    apiKey:        existing?.apiKey        ?? data.apiKey        ?? '',
+    apiUrl:        existing?.apiUrl        ?? data.apiUrl        ?? 'https://api.drill.dev',
+    plan:          data.plan          ?? existing?.plan          ?? 'free',
+    runCount:      existing?.runCount      ?? data.runCount      ?? 0,
+    runLimit:      existing?.runLimit      ?? data.runLimit      ?? 20,
+    model:         existing?.model         ?? data.model         ?? 'cloud',
+    localModel:    existing?.localModel    ?? data.localModel,
+    redact:        existing?.redact        ?? data.redact        ?? true,
+    provider:      existing?.provider      ?? data.provider      ?? 'minimax',
+    providerModel: existing?.providerModel ?? data.providerModel ?? 'MiniMax-M2.5',
+    customUrl:     existing?.customUrl     ?? data.customUrl,
+    email:         data.email,
+    registered:    data.registered,
+    weekLimit:     data.weekLimit,
+    runsWeek:      data.runsWeek ?? 0,
+    weekReset:     data.weekReset,
+  } as DrillAuthData;
+  store.set('auth', merged);
 }
 
-/**
- * Updates a subset of auth fields, merging with existing data.
- * @param partial Partial auth data to merge
- */
 export function updateAuth(partial: {
   provider?: ProviderName;
   providerModel?: string;
   apiKey?: string;
   customUrl?: string;
+  localModel?: string;
 }): void {
-  const existing = loadAuth();
-  const merged: DrillAuthData = {
-    apiKey: partial.apiKey ?? existing?.apiKey ?? '',
-    apiUrl: existing?.apiUrl ?? 'https://api.drill.dev',
-    plan: existing?.plan ?? 'free',
-    runCount: existing?.runCount ?? 0,
-    runLimit: existing?.runLimit ?? 20,
-    provider: partial.provider ?? existing?.provider ?? 'minimax',
-    providerModel: partial.providerModel ?? existing?.providerModel ?? 'MiniMax-M2.5',
-    model: existing?.model ?? 'cloud',
-    localModel: existing?.localModel,
-    redact: existing?.redact ?? true,
-    customUrl: existing?.customUrl,
-  };
-  if (partial.customUrl !== undefined) {
-    merged.customUrl = partial.customUrl || undefined;
-  }
-  saveAuth(merged);
+  const store = getConfigStore();
+  const existing = loadAuth() ?? {} as DrillAuthData;
+  const merged = {
+    apiKey:        partial.apiKey ?? existing.apiKey ?? '',
+    apiUrl:        existing.apiUrl ?? 'https://api.drill.dev',
+    plan:          existing.plan ?? 'free',
+    runCount:      existing.runCount ?? 0,
+    runLimit:      existing.runLimit ?? 20,
+    model:         existing.model ?? 'cloud',
+    localModel:    partial.localModel ?? existing.localModel,
+    redact:        existing.redact ?? true,
+    provider:      partial.provider ?? existing.provider ?? 'minimax',
+    providerModel: partial.providerModel ?? existing.providerModel ?? 'MiniMax-M2.5',
+    customUrl:     partial.customUrl !== undefined ? (partial.customUrl || undefined) : existing.customUrl,
+    email:         existing.email,
+    registered:    existing.registered,
+    weekLimit:     existing.weekLimit,
+    runsWeek:      existing.runsWeek,
+    weekReset:     existing.weekReset,
+  } as DrillAuthData;
+  store.set('auth', merged);
 }
 
-/**
- * Clears auth data from ~/.drill/config.
- */
 export function clearAuth(): void {
   const store = getConfigStore();
   store.delete('auth');
 }
 
-/**
- * Clears only the Supabase session fields while preserving provider setup.
- */
-export function clearSessionAuth(): void {
-  const auth = loadAuth();
-  if (!auth) return;
-
-  const { supabaseToken, supabaseUserId, email, runsWeek, weekLimit, weekReset, ...rest } = auth;
-  void supabaseToken;
-  void supabaseUserId;
-  void email;
-  void runsWeek;
-  void weekLimit;
-  void weekReset;
-
-  saveAuth(rest);
-}
-
-/**
- * Gets the API key to use for requests.
- * Precedence: 1) ~/.drill/config → 2) DRILL_API_KEY env var → empty string
- */
 export function getApiKey(): string {
   const auth = loadAuth();
   if (auth?.apiKey) return auth.apiKey;
@@ -147,151 +129,28 @@ export function getApiKey(): string {
   return '';
 }
 
-/**
- * Checks if the user has a stored API key (from drill login).
- */
 export function hasStoredAuth(): boolean {
   const auth = loadAuth();
   return auth?.apiKey !== undefined && auth.apiKey.length > 0;
 }
 
-/**
- * Gets the API URL to use for requests.
- * Returns config file URL if available, otherwise defaults to DRILL_API_URL env var.
- */
 export function getApiUrl(): string {
   const auth = loadAuth();
   if (auth?.apiUrl) return auth.apiUrl;
   return process.env['DRILL_API_URL'] ?? 'https://api.drill.dev';
 }
 
-/**
- * Returns the plan info from auth config.
- */
-export function getPlanInfo(): { plan: string; runCount: number; runLimit: number } {
-  const auth = loadAuth();
-  return {
-    plan: auth?.plan ?? 'unknown',
-    runCount: auth?.runCount ?? 0,
-    runLimit: auth?.runLimit ?? 20,
-  };
-}
-
-/**
- * Increments the run count by 1.
- */
-export function incrementRunCount(): void {
-  const auth = loadAuth();
-  if (auth) {
-    auth.runCount += 1;
-    saveAuth(auth);
-  }
-}
-
-/**
- * Masks an API key for safe display.
- * Shows first 4 and last 4 characters.
- */
-export function maskKey(key: string): string {
-  if (key.length <= 8) return '***';
-  return key.slice(0, 4) + '***' + key.slice(-4);
-}
-
-/**
- * Gets the configured provider name, defaulting to 'minimax'.
- */
 export function getProvider(): ProviderName {
   const auth = loadAuth();
   return auth?.provider ?? 'minimax';
 }
 
-/**
- * Gets the configured provider model.
- */
 export function getProviderModel(): string {
   const auth = loadAuth();
   return auth?.providerModel ?? 'MiniMax-M2.5';
 }
 
-/**
- * Returns true if a valid Supabase token is stored in config.
- */
-export function isAuthenticated(): boolean {
-  const config = loadAuth();
-  return !!config?.supabaseToken && !!config?.supabaseUserId;
-}
-
-/**
- * Returns stored token or null.
- */
-export function getSupabaseToken(): string | null {
-  return loadAuth()?.supabaseToken ?? null;
-}
-
-/**
- * Checks run limit and increments counter atomically via Supabase RPC.
- * Fails open on network error (allows the run) to not block users.
- * Returns current state after increment.
- */
-export async function checkAndIncrementRun(): Promise<{
-  allowed: boolean;
-  runsWeek: number;
-  limit: number;
-  weekReset: string;
-}> {
-  const config = loadAuth();
-  const token  = config?.supabaseToken;
-  const userId = config?.supabaseUserId;
-  const limit  = config?.weekLimit ?? 100;
-
-  if (!token || !userId) {
-    return { allowed: false, runsWeek: 0, limit, weekReset: '' };
-  }
-
-  try {
-    const client = authedClient(token);
-    const { data, error } = await client.rpc('increment_run_count', {
-      user_id: userId,
-    });
-
-    if (error) throw error;
-
-    const result = data as {
-      runs_week: number;
-      plan: string;
-      limit: number;
-      over_limit: boolean;
-    };
-
-    const updatedAuth: DrillAuthData = {
-      apiKey: config?.apiKey ?? '',
-      apiUrl: config?.apiUrl ?? '',
-      plan: result.plan,
-      runCount: config?.runCount ?? 0,
-      runLimit: config?.runLimit ?? 20,
-      model: config?.model ?? 'cloud',
-      localModel: config?.localModel,
-      redact: config?.redact ?? true,
-      provider: config?.provider ?? 'minimax',
-      providerModel: config?.providerModel ?? '',
-      customUrl: config?.customUrl,
-      supabaseToken: token,
-      supabaseUserId: userId,
-      email: config?.email ?? '',
-      runsWeek: result.runs_week,
-      weekLimit: result.limit,
-      weekReset: config?.weekReset ?? '',
-    };
-    saveAuth(updatedAuth as DrillAuthData);
-
-    return {
-      allowed: !result.over_limit,
-      runsWeek: result.runs_week,
-      limit: result.limit,
-      weekReset: config?.weekReset ?? '',
-    };
-  } catch {
-    console.warn(chalk.dim('  (offline — run not counted)\n'));
-    return { allowed: true, runsWeek: config?.runsWeek ?? 0, limit, weekReset: '' };
-  }
+export function maskKey(key: string): string {
+  if (key.length <= 8) return '***';
+  return key.slice(0, 4) + '***' + key.slice(-4);
 }

@@ -4,31 +4,24 @@ import { statusCommand } from '../../src/commands/status';
 import { logoutCommand } from '../../src/commands/logout';
 
 vi.mock('../../src/lib/auth', () => ({
-  loadAuth: vi.fn().mockReturnValue({ supabaseToken: null }),
+  loadAuth: vi.fn().mockReturnValue(null),
   saveAuth: vi.fn(),
   clearAuth: vi.fn(),
-  clearSessionAuth: vi.fn(),
-  getApiKey: vi.fn(),
-  hasStoredAuth: vi.fn(),
-  getApiUrl: vi.fn(),
+  getApiKey: vi.fn().mockReturnValue(''),
+  hasStoredAuth: vi.fn().mockReturnValue(false),
+  getApiUrl: vi.fn().mockReturnValue('https://api.drill.dev'),
   maskKey: vi.fn().mockImplementation((k: string) => k.slice(0, 4) + '***'),
   getProvider: vi.fn().mockReturnValue('minimax'),
   getProviderModel: vi.fn().mockReturnValue('MiniMax-M2.5'),
-  isAuthenticated: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock('../../src/lib/supabase', () => ({
   supabase: {},
-  authedClient: vi.fn().mockReturnValue({
-    auth: { signOut: vi.fn().mockResolvedValue({}) },
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: null }),
-        }),
-      }),
-    }),
-  }),
+}));
+
+vi.mock('../../src/lib/identity', () => ({
+  getStatus: vi.fn().mockResolvedValue({ found: false }),
+  checkAndCount: vi.fn().mockResolvedValue({ allowed: true, registered: false, runsWeek: 0, limit: 100, plan: 'free' }),
 }));
 
 vi.mock('../../src/lib/env', () => ({
@@ -150,40 +143,20 @@ describe('commands', () => {
     beforeEach(() => {
       consoleOutput = [];
       console.log = (...args: unknown[]) => { consoleOutput.push(args.join(' ')); };
+      vi.mocked(auth.getApiKey).mockReturnValue('');
     });
 
     afterEach(() => {
       console.log = originalLog;
-      vi.unstubAllEnvs();
     });
 
-    it('shows not logged in when no auth', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue(null);
-      vi.mocked(auth.isAuthenticated).mockReturnValue(false);
+    it('shows not registered when no API key', async () => {
+      vi.mocked(auth.getApiKey).mockReturnValue('');
 
       await statusCommand();
 
       const output = consoleOutput.join('');
-      expect(output).toContain('Not logged in');
-    });
-
-    it('shows status when logged in', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue({
-        supabaseToken: 'test-token',
-        supabaseUserId: 'test-user-id',
-        email: 'test@example.com',
-        apiKey: 'key', apiUrl: 'https://api.drill.dev', plan: 'pro', runCount: 5, runLimit: 100,
-        provider: 'openai', providerModel: 'gpt-4o', model: 'cloud', localModel: undefined,
-        redact: true, customUrl: undefined,
-        runsWeek: 10, weekLimit: 100, weekReset: '2029-01-01',
-      });
-      vi.mocked(auth.isAuthenticated).mockReturnValue(true);
-
-      await statusCommand();
-
-      const output = consoleOutput.join('');
-      expect(output).toContain('Drill status');
-      expect(output).toContain('test@example.com');
+      expect(output).toContain('Not registered');
     });
   });
 
@@ -200,34 +173,9 @@ describe('commands', () => {
       console.log = originalLog;
     });
 
-    it('clears auth when logged in', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue({
-        supabaseToken: 'test-token',
-        supabaseUserId: 'test-user-id',
-        apiKey: 'test',
-        apiUrl: 'https://api.drill.dev',
-        plan: 'free',
-        runCount: 0,
-        runLimit: 100,
-        provider: 'minimax',
-        providerModel: 'MiniMax-M2.5',
-        model: 'cloud' as const,
-        localModel: undefined,
-        redact: true,
-        customUrl: undefined,
-      });
-
+    it('clears auth', async () => {
       await logoutCommand();
-
-      expect(vi.mocked(auth.clearSessionAuth)).toHaveBeenCalledOnce();
-    });
-
-    it('does not clear session state when not logged in', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue(null);
-
-      await logoutCommand();
-
-      expect(vi.mocked(auth.clearSessionAuth)).not.toHaveBeenCalled();
+      expect(vi.mocked(auth.clearAuth)).toHaveBeenCalledOnce();
     });
   });
 });

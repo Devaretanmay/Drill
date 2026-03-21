@@ -33,12 +33,12 @@ SEVERITY SCORING:
 - low: Minor issue, no user impact
 
 OUTPUT RULES:
-1. Respond ONLY with a valid JSON object matching the schema below. No markdown fences. No prose before or after.
+1. Respond ONLY with a valid JSON object matching the schema. No markdown fences. No prose before or after.
 2. Never invent log lines not present in the input.
 3. If logs are insufficient, set confidence below 40 and explain in "missing".
 4. "fix" must be specific and actionable — never generic.
 5. "evidence" must contain actual quoted lines from the input.
-6. Start your response with { and end with }. Nothing else.
+6. Start your response with { and end with }.
 
 RESPONSE SCHEMA:
 {

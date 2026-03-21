@@ -161,13 +161,3 @@ export async function analyze(
     message: 'Failed to parse LLM response after retries.',
   } satisfies DrillError;
 }
-
-/**
- * @deprecated Use analyze() instead. Kept for backward compatibility.
- */
-export async function analyzeWithOptions(
-  input: string,
-  callbacks: Pick<StreamCallbacks, 'onThinking' | 'onResultChunk'>,
-): Promise<DrillResult | DrillError> {
-  return analyze({ input, ...callbacks });
-}

@@ -59,13 +59,11 @@ export interface DrillConfig {
   provider: ProviderName;
   providerModel: string;
   customUrl: string | undefined;
-  // Supabase auth fields (added for login flow)
-  supabaseToken?: string;    // session access_token from Supabase
-  supabaseUserId?: string;   // Supabase auth.users UUID
-  email?: string;            // user's email address
-  runsWeek?: number;         // cached run count for display
-  weekLimit?: number;        // 100 for free, 999999 for pro
-  weekReset?: string;        // ISO date of next weekly reset
+  registered?: boolean;
+  email?: string;
+  runsWeek?: number;
+  weekLimit?: number;
+  weekReset?: string;
 }
 
 export interface StreamEvent {
@@ -90,7 +88,6 @@ export interface ChunkOptions {
   maxChars: number;
   lastNLines: number;
   headLines: number;
-  contextRadius: number;
 }
 
 export interface ChunkResult {

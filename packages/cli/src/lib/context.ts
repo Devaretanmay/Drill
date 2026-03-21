@@ -148,7 +148,7 @@ function extractKeywords(input: string): string[] {
     const matches = input.matchAll(pattern);
     for (const match of matches) {
       const value = match[1]?.trim();
-      if (value && value.length > 1 && value.length < 100) {
+      if (value && value.length > 1 && value.length < 50) {
         keywords.add(value);
       }
     }

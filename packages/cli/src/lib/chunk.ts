@@ -12,7 +12,6 @@ const DEFAULTS: ChunkOptions = {
   maxChars: 320000,
   lastNLines: 200,
   headLines: 20,
-  contextRadius: 0,
 };
 
 export function estimateTokens(input: string): number {

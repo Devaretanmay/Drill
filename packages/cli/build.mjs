@@ -14,10 +14,9 @@ await build({
     js: `#!/usr/bin/env node\n// drill-cli ${pkg.version}`,
   },
   define: {
-    __VERSION__: JSON.stringify(pkg.version),
-    __ANON_KEY__: JSON.stringify(process.env['DRILL_ANON_KEY'] ?? ''),
+    __VERSION__:       JSON.stringify(pkg.version),
     __SUPABASE_URL__: JSON.stringify(process.env['SUPABASE_URL'] ?? ''),
-    __SUPABASE_ANON__: JSON.stringify(process.env['SUPABASE_ANON_KEY'] ?? ''),
+    __SUPABASE_KEY__:  JSON.stringify(process.env['SUPABASE_SERVICE_KEY'] ?? ''),
   },
   external: [
     'fsevents',

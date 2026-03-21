@@ -1,61 +1,43 @@
-/**
- * Status Command Module
- *
- * Shows current authentication status, plan info, and provider config.
- * Fetches live data from Supabase when authenticated.
- */
-
 import chalk from 'chalk';
-import { loadAuth, getProvider, getProviderModel } from '../lib/auth.js';
-import { authedClient } from '../lib/supabase.js';
+import { getStatus } from '../lib/identity.js';
+import { getApiKey, loadAuth } from '../lib/auth.js';
 
 export async function statusCommand(): Promise<void> {
+  const apiKey = getApiKey();
   const config = loadAuth();
 
-  if (!config?.supabaseToken || !config?.supabaseUserId) {
-    console.log(chalk.yellow('\n  Not logged in. Run: drill login\n'));
+  if (!apiKey) {
+    console.log(chalk.yellow('\n  Not registered. Run: drill register\n'));
     return;
   }
 
-  let runsWeek = config.runsWeek ?? 0;
-  let plan = config.plan ?? 'free';
-  let weekReset = config.weekReset ?? '';
+  const status = await getStatus(apiKey);
 
-  try {
-    const { data } = await authedClient(config.supabaseToken)
-      .from('users')
-      .select('runs_week, week_reset, plan')
-      .eq('id', config.supabaseUserId)
-      .single();
-
-    if (data) {
-      runsWeek  = data.runs_week;
-      plan      = data.plan;
-      weekReset = data.week_reset;
-    }
-  } catch {
-    // Use cached values if offline
+  if (!status.found) {
+    console.log(chalk.yellow('\n  Not registered. Run: drill register\n'));
+    return;
   }
 
-  const limit  = plan === 'free' ? 100 : 999999;
-  const pct    = Math.min(100, Math.round((runsWeek / limit) * 100));
-  const bar    = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
-  const reset  = weekReset
-    ? new Date(weekReset).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    : 'Unknown';
+  const limit   = status.limit ?? 100;
+  const used    = status.runsWeek ?? 0;
+  const pct     = Math.min(100, Math.round((used / limit) * 100));
+  const filled  = Math.round(pct / 10);
+  const bar     = chalk.hex('#3FB950')('█'.repeat(filled)) +
+                  chalk.hex('#30363D')('░'.repeat(10 - filled));
+  const reset   = status.weekReset
+    ? new Date(status.weekReset).toLocaleDateString('en-US',
+        { weekday: 'long', month: 'short', day: 'numeric' })
+    : 'Monday';
 
-  const provider = getProvider();
-  const providerModel = getProviderModel();
-
-  console.log('\n' + chalk.bold('  Drill status'));
-  console.log(chalk.dim('  ─────────────────────────────'));
-  console.log(`  Email:     ${config.email ?? 'unknown'}`);
-  console.log(`  Plan:      ${chalk.bold(plan)}`);
-  console.log(`  Usage:     ${bar} ${runsWeek}/${limit === 999999 ? '∞' : limit} this week`);
-  console.log(`  Resets:    ${reset}`);
-  console.log(`  Provider:  ${provider ? chalk.cyan(provider) : chalk.dim('not configured — run drill setup')}`);
-  if (providerModel) {
-    console.log(`  Model:     ${providerModel}`);
+  console.log('\n' + chalk.bold('  drill status'));
+  console.log(chalk.dim('  ────────────────────────────'));
+  console.log(`  ${chalk.dim('email')}     ${status.email}`);
+  console.log(`  ${chalk.dim('plan')}      ${chalk.bold(status.plan ?? 'free')}`);
+  console.log(`  ${chalk.dim('usage')}     ${bar} ${used}/${limit === 999999 ? '∞' : limit}`);
+  console.log(`  ${chalk.dim('resets')}    ${reset}`);
+  console.log(`  ${chalk.dim('provider')}  ${config?.provider ? chalk.cyan(config.provider) : chalk.dim('not set')}`);
+  if (config?.providerModel) {
+    console.log(`  ${chalk.dim('model')}     ${config.providerModel}`);
   }
-  console.log(chalk.dim('  ─────────────────────────────\n'));
+  console.log(chalk.dim('  ────────────────────────────\n'));
 }

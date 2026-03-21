@@ -6,6 +6,10 @@ Drill is a production-grade CLI tool, Node/Python SDK, and GitHub Action that ta
 
 **This is not an MVP. Every feature is built completely, tested, typed, and production-ready. No stubs, no TODO comments, no "implement later" placeholders.**
 
+## Architecture note — CLI calls providers directly
+
+The CLI calls LLM providers directly via the adapter pattern in `providers.ts`. It does NOT call a managed backend API. The managed API backend described in `SPEC_API.md` is **deferred** — not current architecture. Do not build `/api/analyze` routes until this decision is revisited.
+
 ## Stack — non-negotiable
 
 - **CLI binary**: TypeScript, compiled with `esbuild` to a standalone Node.js bundle
@@ -78,7 +82,9 @@ NEXT_PUBLIC_APP_URL=
 
 # packages/cli (runtime, from ~/.drill/config)
 DRILL_API_KEY=            # Set by `drill login`
-DRILL_API_URL=            # Default: https://drill.dev — overridable for self-host
+DRILL_API_URL=            # Default: https://api.drill.dev — overridable for self-host
+SUPABASE_URL=             # Required for drill register/status (build-time inject or runtime env)
+SUPABASE_SERVICE_KEY=     # Required for drill register/status (build-time inject or runtime env)
 ```
 
 ## Code quality gates (CI enforces all)

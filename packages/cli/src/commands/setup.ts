@@ -289,9 +289,9 @@ export async function setupCommand(): Promise<void> {
   if (apiKey) {
     console.log(`  ${chalk.bold('API Key:')} ${chalk.dim('(stored)')}`);
   }
-  if (existingAuth?.supabaseToken && existingAuth?.supabaseUserId) {
+  if (existingAuth?.registered) {
     console.log(`\n  ${chalk.dim('Try it now:')} ${chalk.cyan("echo 'Error: ECONNREFUSED' | drill")}\n`);
   } else {
-    console.log(`\n  ${chalk.dim('Next:')} ${chalk.cyan('drill login')} ${chalk.dim('to activate your account, then run Drill.')}\n`);
+    console.log(`\n  ${chalk.dim('Next:')} ${chalk.cyan('drill register')} ${chalk.dim('to activate your account, then run Drill.')}\n`);
   }
 }

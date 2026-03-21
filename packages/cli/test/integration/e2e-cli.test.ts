@@ -80,7 +80,7 @@ describe('E2E CLI binary', () => {
 
     it('shows login help', () => {
       const result = runCli(['login', '--help']);
-      expect(result.stdout).toContain('Authenticate');
+      expect(result.stdout).toContain('Alias for drill register');
       expect(result.status).toBe(0);
     });
 
@@ -104,7 +104,7 @@ describe('E2E CLI binary', () => {
       const result = runCli(['test error']);
       expect(result.status).toBe(1);
       const output = result.stderr + result.stdout;
-      expect(output).toContain('Not logged in');
+      expect(output).toContain('No API key configured');
     });
 
     it('exits 1 for empty stdin when not a TTY', () => {
@@ -216,7 +216,7 @@ describe('E2E CLI binary', () => {
     it('shows not logged in when not authenticated', () => {
       const result = runCli(['status']);
       expect(result.status).toBe(0);
-      expect(result.stdout).toContain('Not logged in');
+      expect(result.stdout).toContain('Not registered');
     });
   });
 

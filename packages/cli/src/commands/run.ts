@@ -1,20 +1,13 @@
-/**
- * Run Command Module
- * 
- * Core `drill [input]` command implementation.
- * Reads log input from stdin or inline argument, applies redaction and chunking,
- * builds context from source directory, calls LLM API, and renders result.
- */
-
 import chalk from 'chalk';
 import { preprocess, preprocessVerbose } from '../lib/preprocess.js';
 import { buildContext } from '../lib/context.js';
 import { analyze } from '../lib/api.js';
 import {
-  startSpinner, stopSpinner, showThinking, showResult, showError,
+  showThinking, showResult,
   showInputInfo, showRedactStats,
 } from '../lib/render.js';
-import { loadAuth, isAuthenticated, checkAndIncrementRun } from '../lib/auth.js';
+import { checkAndCount } from '../lib/identity.js';
+import { getApiKey, loadAuth } from '../lib/auth.js';
 import type { DrillError } from '../types.js';
 
 export interface RunOptions {
@@ -50,40 +43,33 @@ export async function runCommand(
     process.exit(1);
   }
 
-  // Auth check
-  if (!isAuthenticated()) {
-    console.error(chalk.yellow('\n  Not logged in. Run: drill login\n'));
+  const apiKey = getApiKey();
+
+  if (!apiKey) {
+    console.error(chalk.yellow('\n  No API key configured. Run: drill setup\n'));
     process.exit(1);
   }
 
-  // Run limit check
-  const limitCheck = await checkAndIncrementRun();
+  const check = await checkAndCount(apiKey);
 
-  if (!limitCheck.allowed) {
-    showError({
-      code: 'LIMIT_REACHED',
-      message: `Weekly limit reached (${limitCheck.runsWeek}/${limitCheck.limit})`,
-    });
-    if (limitCheck.weekReset) {
-      console.log(chalk.dim(`  Resets: ${limitCheck.weekReset}\n`));
-    }
+  if (!check.registered) {
+    console.error(chalk.yellow('\n  Not registered. Run: drill register\n'));
+    process.exit(1);
+  }
+
+  if (!check.allowed) {
+    console.error(
+      '\n  ' + chalk.hex('#EF5350')('✕ ') +
+      chalk.hex('#E6EDF3')(`Weekly limit reached (${check.runsWeek}/${check.limit})`) +
+      '\n'
+    );
     process.exit(2);
   }
 
-  // Warn when approaching limit
-  const pct = limitCheck.runsWeek / limitCheck.limit;
-  if (pct >= 0.9 && limitCheck.limit < 999999) {
-    console.log(chalk.yellow(
-      `  ${limitCheck.runsWeek}/${limitCheck.limit} analyses used this week\n`
+  if (check.runsWeek / check.limit >= 0.9 && check.limit < 999999) {
+    console.log(chalk.hex('#FF9800')(
+      `  ${check.runsWeek}/${check.limit} analyses used this week\n`
     ));
-  }
-
-  const auth = loadAuth();
-  if (!auth?.provider && !process.env['DRILL_API_KEY']) {
-    console.error('\n  Drill is not configured.\n');
-    console.error('  Run the setup wizard to configure your LLM provider:');
-    console.error('  ' + chalk.cyan('drill setup') + '\n');
-    process.exit(1);
   }
 
   let rawInput: string;
@@ -106,7 +92,8 @@ export async function runCommand(
   }
 
   if (!rawInput.trim()) {
-    showError({ code: 'EMPTY_INPUT', message: 'Empty input. Nothing to analyze.' });
+    console.error(chalk.hex('#EF5350')('\n  ✕ No input'));
+    console.error(chalk.hex('#484F58')('    Usage: cat error.log | drill\n'));
     process.exit(1);
   }
 
@@ -120,7 +107,6 @@ export async function runCommand(
     rawInput = allLines.slice(-n).join('\n');
   }
 
-  // Build context from source directory (before redaction — we want raw file contents)
   let contextBlock = '';
   if (options.context) {
     if (!options.json) {
@@ -156,16 +142,23 @@ export async function runCommand(
   }
 
   if (doRedact && finalInput === '__DRILL_FULLY_REDACTED__') {
-    showError({ code: 'REDACTED_EMPTY', message: 'All content was redacted' });
+    console.error(chalk.hex('#EF5350')('\n  ✕ Input fully redacted'));
+    console.error(chalk.hex('#484F58')('    Use --no-redact if the log contains no sensitive data\n'));
     process.exit(1);
   }
 
   if (!options.json) {
-    showInputInfo(preprocessed.chunkResult.resultLines, preprocessed.chunkResult.wasChunked);
+    showInputInfo(
+      preprocessed.chunkResult.originalLines,
+      preprocessed.filterResult.keptLineCount,
+      preprocessed.filterResult.matchedLineCount,
+      preprocessed.chunkResult.wasChunked,
+    );
   }
 
   let thinkingStarted = false;
   const timeoutMs = parseTimeoutMs(options.timeout);
+  const auth = loadAuth();
   const localModel = options.local ? (options.model ?? auth?.localModel ?? 'llama3.2') : undefined;
 
   const analyzeOptions: Parameters<typeof analyze>[0] = {
@@ -174,7 +167,6 @@ export async function runCommand(
     onThinking: (text) => {
       if (!options.json) {
         if (!thinkingStarted) {
-          stopSpinner();
           thinkingStarted = true;
         }
         showThinking(text);
@@ -192,22 +184,18 @@ export async function runCommand(
     analyzeOptions.providerModelOverride = localModel;
   }
 
-  if (!options.json) {
-    startSpinner();
-  }
-
   const result = await analyze(analyzeOptions);
-
-  if (!options.json && !thinkingStarted) {
-    stopSpinner();
-  }
 
   if ('code' in result) {
     const error = result as DrillError;
     if (options.json) {
       process.stderr.write(JSON.stringify({ error }) + '\n');
     } else {
-      showError(error);
+      console.error(chalk.hex('#EF5350')(`\n  ✕ ${error.code}`));
+      if (error.message) {
+        console.error(chalk.hex('#484F58')(`    ${error.message}`));
+      }
+      console.error('');
     }
     process.exit(error.code === 'LIMIT_REACHED' ? 2 : 1);
   }

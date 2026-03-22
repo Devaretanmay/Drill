@@ -13,7 +13,7 @@
 
 [![npm version](https://img.shields.io/npm/v/drill-log?color=7C3AED&style=flat-square)](https://www.npmjs.com/package/drill-log)
 [![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-7C3AED?style=flat-square)](./LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/anomalyco/drill/ci.yml?color=7C3AED&style=flat-square&label=CI)](https://github.com/anomalyco/drill/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/Devaretanmay/drill/ci.yml?color=7C3AED&style=flat-square&label=CI)](https://github.com/Devaretanmay/drill/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-7C3AED?style=flat-square)](https://www.typescriptlang.org/)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-7C3AED?style=flat-square)](https://nodejs.org)
 
@@ -230,7 +230,7 @@ stdin / inline arg
 
 ```bash
 # Clone
-git clone https://github.com/anomalyco/drill
+git clone https://github.com/Devaretanmay/drill
 cd drill
 
 # Install dependencies

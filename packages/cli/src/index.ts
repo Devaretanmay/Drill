@@ -26,6 +26,8 @@ program
   .option('--verbose', 'Show redaction stats, timing, and debug info')
   .option('--timeout <seconds>', 'Request timeout in seconds (default: 90)')
   .option('--watch <file>', 'Watch a file for errors and auto-analyze')
+  .option('--git-diff', 'Include git diff of last commit in diagnosis')
+  .option('--meta <context>', 'Additional context: env, config, branch, deploy info')
   .action(async (input: string | undefined, options: Record<string, unknown>) => {
     if (options['watch']) {
       await watchCommand(options as unknown as WatchOptions);

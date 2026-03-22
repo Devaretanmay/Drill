@@ -18,6 +18,8 @@ import type { DrillResult, DrillError, StreamCallbacks, DrillConfig } from '../t
 export interface AnalyzeOptions {
   input: string;
   context?: string;
+  gitDiff?: string;
+  meta?: string;
   onThinking?: (text: string) => void;
   onResultChunk?: (text: string) => void;
   timeoutMs?: number;
@@ -77,7 +79,7 @@ export async function analyze(
   const adapter = getAdapter(config, options.timeoutMs ?? 90_000);
 
   const systemPrompt = SYSTEM_PROMPT;
-  const userPrompt = buildUserPrompt(options.input, options.context);
+  const userPrompt = buildUserPrompt(options.input, options.context, options.gitDiff, options.meta);
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },

@@ -1,6 +1,6 @@
 {
   "name": "drill-log",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "AI-powered log diagnosis CLI",
   "bin": {

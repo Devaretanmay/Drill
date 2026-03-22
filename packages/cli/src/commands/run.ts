@@ -7,6 +7,7 @@ import {
   showInputInfo, showRedactStats,
 } from '../lib/render.js';
 import { getApiKey, loadAuth } from '../lib/auth.js';
+import { readGitDiff, formatGitDiffBlock } from '../lib/gitdiff.js';
 import type { DrillError } from '../types.js';
 
 export interface RunOptions {
@@ -19,6 +20,8 @@ export interface RunOptions {
   model?: string;
   verbose?: boolean;
   timeout?: string;
+  gitDiff?: boolean;
+  meta?: string;
 }
 
 function parseTimeoutMs(timeoutSeconds: string | undefined): number {
@@ -155,6 +158,37 @@ export async function runCommand(
 
   if (contextBlock) {
     analyzeOptions.context = contextBlock;
+  }
+
+  let gitDiffBlock: string | undefined;
+  if (options.gitDiff) {
+    const gitResult = readGitDiff();
+    if (!options.json) {
+      if (!gitResult.available) {
+        console.log(chalk.dim(`  git: ${gitResult.error ?? 'not available'}`));
+      } else {
+        const fileCount = gitResult.changedFiles.length;
+        console.log(chalk.dim(
+          `  git: ${gitResult.commitHash} · ${fileCount} file${fileCount !== 1 ? 's' : ''} changed`
+        ));
+      }
+    }
+    gitDiffBlock = formatGitDiffBlock(gitResult);
+  }
+
+  if (options.meta && !options.json) {
+    const metaPreview = options.meta.length > 60
+      ? options.meta.slice(0, 60) + '...'
+      : options.meta;
+    console.log(chalk.dim(`  meta: ${metaPreview}`));
+  }
+
+  if (gitDiffBlock) {
+    analyzeOptions.gitDiff = gitDiffBlock;
+  }
+
+  if (options.meta) {
+    analyzeOptions.meta = options.meta;
   }
 
   if (options.local) {

@@ -34,6 +34,8 @@ export interface WatchOptions {
   model?: string;
   verbose?: boolean;
   timeout?: string;
+  gitDiff?: boolean;
+  meta?: string;
 }
 
 function parseTimeoutMs(timeoutSeconds: string | undefined): number {

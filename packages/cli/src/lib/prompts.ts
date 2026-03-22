@@ -78,9 +78,16 @@ const TYPE_HINTS: Record<InputType, string> = {
  * Builds the user prompt message for M2.5.
  * @param input Redacted, chunked log string
  * @param context Optional codebase context string
+ * @param gitDiff Optional git diff string (from formatGitDiffBlock)
+ * @param meta Optional additional context string
  * @returns Formatted user message string
  */
-export function buildUserPrompt(input: string, context?: string): string {
+export function buildUserPrompt(
+  input: string,
+  context?: string,
+  gitDiff?: string,
+  meta?: string,
+): string {
   const lineCount = input.split('\n').length;
   const inputType = detectInputType(input);
   const typeHint = TYPE_HINTS[inputType];
@@ -91,16 +98,31 @@ export function buildUserPrompt(input: string, context?: string): string {
 
   const hintSection = typeHint ? `\n${typeHint}\n` : '';
 
-  return [
+  const parts: string[] = [
     `Analyze the following and identify the root cause. (${lineCount} lines)`,
     '',
     '=== LOG INPUT ===',
     input,
     '=== END LOG INPUT ===',
     contextSection,
-    hintSection,
-    'Respond with the DrillResult JSON schema only.',
-  ].filter((s): s is string => s !== undefined).join('\n');
+  ];
+
+  if (gitDiff) {
+    parts.push(gitDiff);
+    parts.push('');
+  }
+
+  if (meta) {
+    parts.push('=== ADDITIONAL CONTEXT ===');
+    parts.push(meta.trim());
+    parts.push('=== END ADDITIONAL CONTEXT ===');
+    parts.push('');
+  }
+
+  parts.push(hintSection);
+  parts.push('Respond with the DrillResult JSON schema only.');
+
+  return parts.join('\n');
 }
 
 export const DrillResultSchema = z.object({

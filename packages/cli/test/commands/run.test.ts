@@ -40,6 +40,19 @@ vi.mock('../../src/lib/render', () => ({
   clearThinking: vi.fn(),
 }));
 
+vi.mock('../../src/lib/gitdiff', () => ({
+  readGitDiff: vi.fn().mockReturnValue({
+    available: true,
+    diff: '-const x = null;\n+const x = client.init();',
+    changedFiles: ['UserService.java'],
+    commitHash: 'abc1234',
+    commitMessage: 'fix: null pointer',
+  }),
+  formatGitDiffBlock: vi.fn().mockReturnValue(
+    '=== GIT CONTEXT ===\nCommit: abc1234 — fix: null pointer\n=== END GIT CONTEXT ==='
+  ),
+}));
+
 describe('runCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -321,5 +334,45 @@ describe('runCommand', () => {
     expect(exitSpy).not.toHaveBeenCalled();
     expect(analyze).toHaveBeenCalled();
     exitSpy.mockRestore();
+  });
+
+  it('passes git diff block to analyze when --git-diff is set', async () => {
+    const { analyze } = await import('../../src/lib/api');
+    await runCommand('test error', { gitDiff: true });
+    expect(analyze).toHaveBeenCalledOnce();
+    const callArg = (analyze as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.gitDiff).toContain('GIT CONTEXT');
+    expect(callArg.gitDiff).toContain('abc1234');
+  });
+
+  it('passes meta string to analyze when --meta is set', async () => {
+    const { analyze } = await import('../../src/lib/api');
+    await runCommand('test error', { meta: 'env=prod,branch=feature' });
+    expect(analyze).toHaveBeenCalledOnce();
+    const callArg = (analyze as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.meta).toBe('env=prod,branch=feature');
+  });
+
+  it('does not pass gitDiff to analyze when --git-diff is not set', async () => {
+    const { analyze } = await import('../../src/lib/api');
+    await runCommand('test error', {});
+    expect(analyze).toHaveBeenCalledOnce();
+    const callArg = (analyze as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.gitDiff).toBeUndefined();
+  });
+
+  it('warns when --git-diff is used outside git repo', async () => {
+    const { readGitDiff } = await import('../../src/lib/gitdiff');
+    (readGitDiff as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      available: false,
+      diff: '',
+      changedFiles: [],
+      commitHash: '',
+      commitMessage: '',
+      error: 'Not a git repository',
+    });
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await runCommand('test error', { gitDiff: true });
+    consoleSpy.mockRestore();
   });
 });

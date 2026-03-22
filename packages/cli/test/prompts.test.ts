@@ -64,6 +64,46 @@ describe('buildUserPrompt', () => {
     const prompt = buildUserPrompt('test log');
     expect(prompt).toContain('DrillResult JSON schema only');
   });
+
+  it('includes git diff block when provided', () => {
+    const gitBlock = '=== GIT CONTEXT ===\nCommit: abc1234\nChanged files: UserService.java\n\nDiff:\n-old\n+new\n=== END GIT CONTEXT ===';
+    const prompt = buildUserPrompt('error log', undefined, gitBlock);
+    expect(prompt).toContain('GIT CONTEXT');
+    expect(prompt).toContain('abc1234');
+  });
+
+  it('omits git diff block when not provided', () => {
+    const prompt = buildUserPrompt('error log');
+    expect(prompt).not.toContain('GIT CONTEXT');
+  });
+
+  it('includes meta block when provided', () => {
+    const prompt = buildUserPrompt('error log', undefined, undefined, 'env=prod');
+    expect(prompt).toContain('ADDITIONAL CONTEXT');
+    expect(prompt).toContain('env=prod');
+  });
+
+  it('omits meta block when not provided', () => {
+    const prompt = buildUserPrompt('error log');
+    expect(prompt).not.toContain('ADDITIONAL CONTEXT');
+  });
+
+  it('places git diff before meta in prompt', () => {
+    const prompt = buildUserPrompt('error log', undefined, 'git content', 'meta content');
+    expect(prompt.indexOf('GIT CONTEXT')).toBeLessThan(prompt.indexOf('ADDITIONAL CONTEXT'));
+  });
+
+  it('includes all three sources when provided', () => {
+    const gitBlock = '=== GIT CONTEXT ===\nCommit: abc123\nChanged files: foo.js\n=== END GIT CONTEXT ===';
+    const prompt = buildUserPrompt('ERROR: null', 'const x = 1', gitBlock, 'env=prod');
+    expect(prompt).toContain('ERROR: null');
+    expect(prompt).toContain('CODEBASE CONTEXT');
+    expect(prompt).toContain('GIT CONTEXT');
+    expect(prompt).toContain('ADDITIONAL CONTEXT');
+    expect(prompt).toContain('const x = 1');
+    expect(prompt).toContain('foo.js');
+    expect(prompt).toContain('env=prod');
+  });
 });
 
 describe('parseResult', () => {

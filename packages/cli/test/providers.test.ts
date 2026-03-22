@@ -15,10 +15,10 @@ import type { DrillConfig } from '../src/types';
 
 const mockConfig = (overrides: Partial<DrillConfig> = {}): DrillConfig => ({
   apiKey: 'test-key',
-  apiUrl: 'https://api.drill.dev',
+  apiUrl: 'https://api.minimax.io/v1',
   plan: 'free',
   runCount: 0,
-  runLimit: 20,
+  runLimit: 999999,
   model: 'cloud',
   localModel: undefined,
   redact: true,
@@ -451,5 +451,168 @@ describe('OllamaAdapter.stream', () => {
     await expect(
       adapter.stream([{ role: 'user', content: 'hi' }], () => {}, () => {})
     ).rejects.toThrow('Ollama is not running');
+  });
+});
+
+describe('AnthropicAdapter.stream', () => {
+  beforeEach(() => {
+    server.listen({ onUnhandledRequest: 'warn' });
+  });
+
+  afterEach(() => {
+    server.close();
+  });
+
+  it('streams SSE and calls onChunk', async () => {
+    server.use(
+      http.post('https://api.anthropic.com/v1/messages', () => {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(
+              'event: message_start\ndata: {"type":"message_start","message":{"id":"1"}}\n\n'
+            ));
+            controller.enqueue(encoder.encode(
+              'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Result"}}\n\n'
+            ));
+            controller.enqueue(encoder.encode(
+              'data: [DONE]\n\n'
+            ));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream', 'anthropic-version': '2023-06-01' },
+        });
+      })
+    );
+
+    const adapter = new AnthropicAdapter('sk-ant-test', 'claude-sonnet-4-20250514', 90_000);
+    const chunks: string[] = [];
+
+    const result = await adapter.stream(
+      [{ role: 'user', content: 'hi' }],
+      () => {},
+      (c) => chunks.push(c),
+    );
+
+    expect(result).toBe('Result');
+  });
+
+  it('streams thinking blocks via onThinking', async () => {
+    server.use(
+      http.post('https://api.anthropic.com/v1/messages', () => {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(
+              'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"analyzing..."}}\n\n'
+            ));
+            controller.enqueue(encoder.encode(
+              'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"answer"}}\n\n'
+            ));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream', 'anthropic-version': '2023-06-01' },
+        });
+      })
+    );
+
+    const adapter = new AnthropicAdapter('sk-ant-test', 'claude-sonnet-4-20250514', 90_000);
+    const thinking: string[] = [];
+
+    const result = await adapter.stream(
+      [{ role: 'user', content: 'hi' }],
+      (t) => thinking.push(t),
+      () => {},
+    );
+
+    expect(result).toBe('answer');
+    expect(thinking.join('')).toContain('analyzing');
+  });
+
+  it('throws ProviderError on 401 response', async () => {
+    server.use(
+      http.post('https://api.anthropic.com/v1/messages', () => {
+        return HttpResponse.json({ error: { type: 'authentication_error' } }, { status: 401 });
+      })
+    );
+
+    const adapter = new AnthropicAdapter('sk-ant-test', 'claude-sonnet-4-20250514', 90_000);
+
+    await expect(
+      adapter.stream([{ role: 'user', content: 'hi' }], () => {}, () => {})
+    ).rejects.toMatchObject({ code: 'INVALID_KEY' });
+  });
+
+  it('throws ProviderError on non-ok response', async () => {
+    server.use(
+      http.post('https://api.anthropic.com/v1/messages', () => {
+        return HttpResponse.json({ error: 'bad request' }, { status: 400 });
+      })
+    );
+
+    const adapter = new AnthropicAdapter('sk-ant-test', 'claude-sonnet-4-20250514', 90_000);
+
+    await expect(
+      adapter.stream([{ role: 'user', content: 'hi' }], () => {}, () => {})
+    ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+  });
+
+  it('throws ProviderError when response body is null', async () => {
+    server.use(
+      http.post('https://api.anthropic.com/v1/messages', () => {
+        return new Response(null as unknown as BodyInit, { status: 200 });
+      })
+    );
+
+    const adapter = new AnthropicAdapter('sk-ant-test', 'claude-sonnet-4-20250514', 90_000);
+
+    await expect(
+      adapter.stream([{ role: 'user', content: 'hi' }], () => {}, () => {})
+    ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+  });
+});
+
+describe('OpenAICompatAdapter error paths', () => {
+  beforeEach(() => {
+    server.listen({ onUnhandledRequest: 'warn' });
+  });
+
+  afterEach(() => {
+    server.close();
+  });
+
+  it('throws ProviderError on 502 response', async () => {
+    server.use(
+      http.post('https://api.openai.com/v1/chat/completions', () => {
+        return HttpResponse.json({ error: 'Bad Gateway' }, { status: 502 });
+      })
+    );
+
+    const adapter = new OpenAICompatAdapter('sk-test', 'https://api.openai.com/v1', 'gpt-4o', 90_000);
+
+    await expect(
+      adapter.stream([{ role: 'user', content: 'hi' }], () => {}, () => {})
+    ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+  });
+
+  it('throws ProviderError on 503 response', async () => {
+    server.use(
+      http.post('https://api.openai.com/v1/chat/completions', () => {
+        return HttpResponse.json({ error: 'Service Unavailable' }, { status: 503 });
+      })
+    );
+
+    const adapter = new OpenAICompatAdapter('sk-test', 'https://api.openai.com/v1', 'gpt-4o', 90_000);
+
+    await expect(
+      adapter.stream([{ role: 'user', content: 'hi' }], () => {}, () => {})
+    ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
   });
 });

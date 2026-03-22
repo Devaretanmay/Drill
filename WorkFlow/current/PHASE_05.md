@@ -7,6 +7,10 @@ gets an integration test. CI is locked down. After this phase the core product i
 validated, tested, and ready to show real users. This is the end of the no-auth
 validation product.
 
+> **After Phase 5: CLI is shippable.** The `drill` CLI binary is a complete,
+> standalone tool. Users run `drill setup`, provide their own LLM API key,
+> and `drill run` processes logs immediately. No account required. No billing.
+
 ## Depends on
 
 Phases 1–4 complete. Full CLI working end-to-end with all flags.

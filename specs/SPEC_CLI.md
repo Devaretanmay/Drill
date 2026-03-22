@@ -20,20 +20,24 @@ packages/cli/
     commands/
       run.ts                    # Core: read stdin/arg, redact, chunk, call API, stream output
       watch.ts                  # --watch mode: chokidar tail, auto-detect errors, auto-analyze
-      login.ts                  # Open browser to drill.dev/cli-auth, poll for token, save
-      logout.ts                 # Remove ~/.drill/config token
-      status.ts                 # Show plan, run_count/run_limit, API key (masked)
-      config.ts                 # Get/set config values
+      setup.ts                  # Interactive setup wizard: select provider, enter API key, save config
+      logout.ts                 # Clear ~/.drill/config
+      config.ts                 # Get/set config values (provider, model, apiUrl, localModel, redact)
     lib/
       redact.ts                 # PII redaction — all patterns, fully tested
       chunk.ts                  # Smart log chunking — handles files up to 100MB
       render.ts                 # Terminal output: live trace, result box, error formatting
-      api.ts                    # HTTP client: POST /api/analyze, retry logic, timeout
-      auth.ts                   # Token R/W from ~/.drill/config using `conf`
+      api.ts                    # LLM calls via adapter pattern (MiniMax, OpenAI, Anthropic, etc.)
+      auth.ts                   # Auth config R/W from ~/.drill/config using `conf`
       stream.ts                 # SSE parser: split think-tags, buffer result, emit events
       context.ts                # --context: walk directory, build file tree, select relevant files
-      upgrade.ts                # Detect limit_reached, show upgrade prompt, open browser
-      env.ts                    # Validate DRILL_API_KEY and DRILL_API_URL at startup
+      env.ts                    # Validate DRILL_API_URL at startup
+      dedup.ts                  # Deduplicate repeated log lines
+      filter.ts                 # Filter log lines by severity
+      preprocess.ts              # Preprocess raw input before analysis
+      providers.ts              # LLM provider adapters (MiniMax, OpenAI, Anthropic, Groq, etc.)
+      models.ts                 # Model list and metadata per provider
+      prompts.ts                # System prompt and analysis instructions
     types.ts                    # All shared TypeScript interfaces and types
   test/
     redact.test.ts
@@ -42,8 +46,14 @@ packages/cli/
     render.test.ts
     api.test.ts
     context.test.ts
-    commands/run.test.ts
-    commands/watch.test.ts
+    auth.test.ts
+    providers.test.ts
+    commands/
+      run.test.ts
+      watch.test.ts
+      config.test.ts
+      setup.test.ts
+      commands.test.ts
   package.json
   tsconfig.json
   build.ts                      # esbuild script

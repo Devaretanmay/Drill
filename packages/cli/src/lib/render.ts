@@ -24,8 +24,6 @@ export interface ShowResultMeta {
   provider?: string;
   model?: string;
   elapsedMs?: number;
-  runsWeek?: number;
-  weekLimit?: number;
 }
 
 export function showResult(result: DrillResult, meta?: ShowResultMeta): void {
@@ -130,14 +128,9 @@ export function showResult(result: DrillResult, meta?: ShowResultMeta): void {
   if (meta?.elapsedMs) parts.push(Math.round(meta.elapsedMs / 1000) + 's');
   const left = footerDim(parts.join(' · '));
 
-  let right = '';
-  if (meta?.runsWeek && meta?.weekLimit && meta.weekLimit < 999999) {
-    right = footerDim(`${meta.runsWeek} / ${meta.weekLimit} this week`);
-  }
-
   const cols = process.stdout.columns ?? 80;
-  const pad = Math.max(1, cols - left.length - right.length - 4);
-  console.log('  ' + left + ' '.repeat(pad) + right);
+  const pad = Math.max(1, cols - left.length - 4);
+  console.log('  ' + left + ' '.repeat(pad));
 
   // 12. Empty line
   console.log('');

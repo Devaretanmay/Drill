@@ -2,42 +2,34 @@
 
 ## What this project is
 
-Drill is a production-grade CLI tool, Node/Python SDK, and GitHub Action that takes any log stream or error message, sends it to MiniMax M2.5 via a managed API, and returns a plain-English root cause with confidence score, severity, fix suggestion, and evidence — streamed live to the terminal in under 60 seconds.
+Drill is a standalone CLI tool that takes any log stream or error message, sends it to an LLM, and returns a plain-English root cause with confidence score, severity, fix suggestion, and evidence — streamed live to the terminal in under 60 seconds.
 
 **This is not an MVP. Every feature is built completely, tested, typed, and production-ready. No stubs, no TODO comments, no "implement later" placeholders.**
 
-## Architecture note — CLI calls providers directly
+## Architecture
 
-The CLI calls LLM providers directly via the adapter pattern in `providers.ts`. It does NOT call a managed backend API. The managed API backend described in `SPEC_API.md` is **deferred** — not current architecture. Do not build `/api/analyze` routes until this decision is revisited.
+The CLI calls LLM providers directly via the adapter pattern in `providers.ts`. It does NOT call a managed backend API. There is no backend, no database, no billing.
 
 ## Stack — non-negotiable
 
 - **CLI binary**: TypeScript, compiled with `esbuild` to a standalone Node.js bundle
-- **API backend**: Next.js 15 App Router, Vercel serverless, TypeScript strict mode
-- **Database**: Supabase Postgres with Row Level Security enabled on every table
-- **Auth**: Clerk (magic link + Google OAuth)
-- **Billing**: Stripe (usage-metered, webhooks)
-- **LLM**: MiniMax M2.5 via `https://api.minimax.io/v1/chat/completions` — OpenAI-compatible
-- **Fallback LLM**: Together AI `MiniMaxAI/MiniMax-M2.5` on any 5xx or timeout from primary
-- **Packages**: pnpm workspaces monorepo — `packages/cli`, `packages/sdk`, `packages/web`, `packages/action`
+- **LLM**: MiniMax M2.5 by default, plus OpenAI, Anthropic, Groq, Mistral, Ollama, Together AI, or any OpenAI-compatible endpoint
+- **Config**: JSON file at `~/.drill/config` via `conf` package
+- **No backend**: drill has no server, no database, no billing
+- **Packages**: `packages/cli` only (future: sdk, web, action — see WorkFlow/future/)
 
 ## Monorepo structure
 
 ```
 drill/
   packages/
-    cli/          # drill-cli npm package
-    sdk/          # drill-sdk npm package (Node + Python)
-    web/          # drill.dev Next.js site
-    action/       # drill/action GitHub Action
-  specs/          # Read these before building each domain
+    cli/          # drill-cli npm package (CURRENT SCOPE)
+    # sdk, web, action — FUTURE SCOPE (see WorkFlow/future/)
+  specs/
     SPEC_CLI.md
-    SPEC_API.md
-    SPEC_SDK.md
-    SPEC_WEB.md
-    SPEC_DATABASE.md
-    SPEC_PROMPTS.md
-    SPEC_TESTING.md
+  WorkFlow/
+    current/      # Active phases (1-5)
+    future/       # Future phases (6-10)
   AGENTS.md       # This file
 ```
 
@@ -48,53 +40,39 @@ drill/
 3. **All errors are typed.** Never `catch (e: any)`. Always `catch (e: unknown)` with `instanceof` narrowing.
 4. **No TODO or FIXME in committed code.** If something needs doing, do it now or create a GitHub issue reference.
 5. **Every exported function has a JSDoc comment** with `@param`, `@returns`, `@throws` where applicable.
-6. **Tests are written alongside implementation, not after.** Vitest for unit tests. Playwright for e2e. Min 80% coverage enforced by CI.
-7. **No secrets in code.** All secrets via environment variables. `process.env.X` always validated at startup with a typed env validator (use `zod`).
+6. **Tests are written alongside implementation, not after.** Vitest for unit tests. Min 80% coverage enforced by CI.
+7. **No secrets in code.** All secrets via environment variables.
 8. **Streaming is non-negotiable.** Every LLM call uses `stream: true`. SSE proxied directly to client. No buffering full responses.
-9. **M2.5 `<think>` tags must be preserved in conversation history.** Never strip them before storing or passing back.
-10. **PII redaction runs before any data leaves the binary.** The `redact()` function is called in `run.ts` before `api.ts` is ever invoked.
+9. **PII redaction runs before any data leaves the binary.** The `redact()` function is called before `api.ts` is ever invoked.
 
-## Before building any domain
+## Supported LLM Providers
 
-Read the corresponding spec file first:
-- CLI work → read `@specs/SPEC_CLI.md`
-- API/backend work → read `@specs/SPEC_API.md`
-- SDK work → read `@specs/SPEC_SDK.md`
-- Web/frontend work → read `@specs/SPEC_WEB.md`
-- Database work → read `@specs/SPEC_DATABASE.md`
-- Prompt engineering → read `@specs/SPEC_PROMPTS.md`
-- Testing → read `@specs/SPEC_TESTING.md`
+| Provider | API Key Env Var | Default Model |
+|---|---|---|
+| MiniMax | `MINIMAX_API_KEY` | `MiniMax-M2.5` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` |
+| Groq | `GROQ_API_KEY` | `llama-3.1-70b-versatile` |
+| Mistral | `MISTRAL_API_KEY` | `mistral-large` |
+| Ollama | (none — local) | `llama3.2` |
+| Together AI | `TOGETHER_API_KEY` | `MiniMaxAI/MiniMax-M2.5` |
+| Custom | `CUSTOM_API_KEY` | any |
 
-## Environment variables (all required at startup)
+## Environment variables
 
 ```
-# packages/web (Vercel)
-MINIMAX_API_KEY=          # Primary LLM
-TOGETHER_API_KEY=         # Fallback LLM
-SUPABASE_URL=
-SUPABASE_SERVICE_KEY=     # Server-side only, never exposed to client
-SUPABASE_ANON_KEY=        # Client-side safe
-CLERK_SECRET_KEY=
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-NEXT_PUBLIC_APP_URL=
-
-# packages/cli (runtime, from ~/.drill/config)
-DRILL_API_KEY=            # Set by `drill login`
-DRILL_API_URL=            # Default: https://api.drill.dev — overridable for self-host
-SUPABASE_URL=             # Required for drill register/status (build-time inject or runtime env)
-SUPABASE_SERVICE_KEY=     # Required for drill register/status (build-time inject or runtime env)
+# packages/cli
+DRILL_API_KEY=           # Optional — stored in ~/.drill/config after setup
+DRILL_API_URL=           # Optional — default: https://api.minimax.io/v1
 ```
 
 ## Code quality gates (CI enforces all)
 
 ```
-pnpm typecheck   # tsc --noEmit across all packages
-pnpm lint        # ESLint + biome
-pnpm test        # vitest run
-pnpm test:e2e    # playwright test
-pnpm build       # must succeed with zero warnings
+pnpm typecheck    # tsc --noEmit
+pnpm test         # vitest run
+pnpm test:coverage # vitest run --coverage (80% threshold on all tracked files)
+pnpm build        # esbuild bundle
 ```
 
 ## Commit convention

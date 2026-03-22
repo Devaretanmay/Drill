@@ -33,16 +33,16 @@ function loadConfig(options: AnalyzeOptions): DrillConfig {
   const provider = options.providerOverride ?? auth?.provider ?? 'minimax';
   const providerModel = options.providerModelOverride
     ?? (provider === 'ollama'
-      ? auth?.localModel ?? auth?.providerModel ?? 'llama3.2'
+      ? auth?.localModel ?? auth?.providerModel ?? ''
       : auth?.providerModel ?? 'MiniMax-M2.5');
 
   return {
     apiKey: auth?.apiKey ?? '',
-    apiUrl: auth?.apiUrl ?? 'https://api.drill.dev',
-    plan: auth?.plan ?? 'free',
-    runCount: auth?.runCount ?? 0,
-    runLimit: auth?.runLimit ?? 20,
-    model: auth?.model ?? 'cloud',
+    apiUrl: auth?.apiUrl ?? 'https://api.minimax.io/v1',
+    plan: 'free',
+    runCount: 0,
+    runLimit: 999999,
+    model: 'cloud',
     localModel: auth?.localModel,
     redact: auth?.redact ?? true,
     provider,

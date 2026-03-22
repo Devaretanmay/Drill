@@ -4,22 +4,18 @@ import * as auth from '../../src/lib/auth';
 
 const mockAuthData = {
   apiKey: 'test-key',
-  apiUrl: 'https://api.drill.dev',
-  plan: 'free',
-  runCount: 0,
-  runLimit: 20,
+  apiUrl: 'https://api.minimax.io/v1',
   provider: 'openai' as const,
   providerModel: 'gpt-4o',
-  model: 'cloud' as const,
   localModel: undefined as string | undefined,
   redact: true,
-  customUrl: 'https://custom.com/v1' as string | undefined,
+  customUrl: undefined as string | undefined,
 };
 
 vi.mock('../../src/lib/auth', () => ({
   loadAuth: vi.fn(),
   saveAuth: vi.fn(),
-  maskKey: vi.fn().mockImplementation((k: string) => k.slice(0, 4) + '***'),
+  maskKey: vi.fn().mockImplementation((k: string) => k.length <= 8 ? '***' : k.slice(0, 4) + '***' + k.slice(-4)),
   hasStoredAuth: vi.fn().mockReturnValue(true),
 }));
 
@@ -31,7 +27,6 @@ vi.mock('chalk', () => ({
     yellow: (s: string) => s,
     red: (s: string) => s,
     cyan: (s: string) => s,
-    underline: (s: string) => s,
   },
 }));
 
@@ -52,11 +47,12 @@ describe('configCommand', () => {
       await configCommand({ action: 'list' });
     });
 
-    it('lists config with custom provider', async () => {
+    it('lists config with custom provider and localModel', async () => {
       vi.mocked(auth.loadAuth).mockReturnValue({
         ...mockAuthData,
         provider: 'custom',
         customUrl: 'https://my-endpoint.com/v1',
+        localModel: 'qwen2.5:latest',
       });
 
       await configCommand({ action: 'list' });
@@ -72,21 +68,34 @@ describe('configCommand', () => {
 
   describe('get', () => {
     it('gets provider key', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue(mockAuthData);
-
       await configCommand({ action: 'get', key: 'provider' });
     });
 
     it('gets providerModel key', async () => {
-      vi.mocked(auth.loadAuth).mockReturnValue(mockAuthData);
-
       await configCommand({ action: 'get', key: 'providerModel' });
     });
 
     it('gets customUrl key', async () => {
       vi.mocked(auth.loadAuth).mockReturnValue({ ...mockAuthData, customUrl: 'https://custom.com' });
-
       await configCommand({ action: 'get', key: 'customUrl' });
+    });
+
+    it('gets localModel key', async () => {
+      vi.mocked(auth.loadAuth).mockReturnValue({ ...mockAuthData, localModel: 'qwen2.5:latest' });
+      await configCommand({ action: 'get', key: 'localModel' });
+    });
+
+    it('gets empty localModel', async () => {
+      vi.mocked(auth.loadAuth).mockReturnValue({ ...mockAuthData, localModel: undefined });
+      await configCommand({ action: 'get', key: 'localModel' });
+    });
+
+    it('gets apiKey with mask', async () => {
+      await configCommand({ action: 'get', key: 'apiKey' });
+    });
+
+    it('gets apiUrl', async () => {
+      await configCommand({ action: 'get', key: 'apiUrl' });
     });
 
     it('exits 1 when key is missing', async () => {
@@ -95,6 +104,16 @@ describe('configCommand', () => {
       });
 
       await expect(configCommand({ action: 'get' })).rejects.toThrow('exit');
+      expect(exit).toHaveBeenCalledWith(1);
+      exit.mockRestore();
+    });
+
+    it('exits 1 for unknown key', async () => {
+      const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+        throw new Error('exit');
+      });
+
+      await expect(configCommand({ action: 'get', key: 'unknown' })).rejects.toThrow('exit');
       expect(exit).toHaveBeenCalledWith(1);
       exit.mockRestore();
     });
@@ -116,22 +135,22 @@ describe('configCommand', () => {
       expect(auth.saveAuth).toHaveBeenCalled();
     });
 
-    it('exits 1 when setting apiKey', async () => {
+    it('sets localModel', async () => {
+      await configCommand({ action: 'set', key: 'localModel', value: 'qwen2.5:latest' });
+      expect(auth.saveAuth).toHaveBeenCalled();
+    });
+
+    it('sets apiUrl', async () => {
+      await configCommand({ action: 'set', key: 'apiUrl', value: 'https://api.openai.com/v1' });
+      expect(auth.saveAuth).toHaveBeenCalled();
+    });
+
+    it('exits 1 when setting apiKey directly', async () => {
       const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit');
       });
 
       await expect(configCommand({ action: 'set', key: 'apiKey', value: 'key' })).rejects.toThrow('exit');
-      expect(exit).toHaveBeenCalledWith(1);
-      exit.mockRestore();
-    });
-
-    it('exits 1 when setting read-only key', async () => {
-      const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
-        throw new Error('exit');
-      });
-
-      await expect(configCommand({ action: 'set', key: 'plan', value: 'pro' })).rejects.toThrow('exit');
       expect(exit).toHaveBeenCalledWith(1);
       exit.mockRestore();
     });

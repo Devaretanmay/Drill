@@ -8,7 +8,7 @@
 import * as readline from 'node:readline';
 import chalk from 'chalk';
 import ora from 'ora';
-import { loadAuth, updateAuth } from '../lib/auth.js';
+import { updateAuth } from '../lib/auth.js';
 import type { ProviderName } from '../types.js';
 import { fetchModels, ModelFetchError } from '../lib/models.js';
 import type { ProviderId } from '../lib/models.js';
@@ -51,7 +51,7 @@ const PROVIDER_INFO: Array<{
   {
     id: 'ollama',
     name: 'Ollama',
-    model: 'llama3.2',
+    model: '',
     description: 'Fully private — runs locally, no API key needed',
     needsKey: false,
   },
@@ -125,7 +125,6 @@ async function isOllamaRunning(): Promise<boolean> {
  * Runs the interactive setup wizard.
  */
 export async function setupCommand(): Promise<void> {
-  const existingAuth = loadAuth();
   const rl = createReadline();
 
   console.log(`\n  ${chalk.bold('Drill Setup')}`);
@@ -210,19 +209,24 @@ export async function setupCommand(): Promise<void> {
     if (models.length > 0) {
       console.log(chalk.bold('\n  Available models:\n'));
       models.forEach((m, i) => {
-        console.log(`  ${chalk.dim(String(i + 1).padStart(3))}  ${m}`);
+        const prefix = i === 0 ? chalk.green('→ ') : `  `;
+        const highlight = i === 0 ? chalk.bold : (x: string) => x;
+        console.log(`${prefix}${chalk.dim(String(i + 1).padStart(3))}  ${highlight(m)}${i === 0 ? ' (recommended)' : ''}`);
       });
       console.log();
 
-      const raw = await askQuestion(rl, '  Select a model (enter number): ');
-      const idx = parseInt(raw.trim(), 10) - 1;
-
-      if (isNaN(idx) || idx < 0 || idx >= models.length || !models[idx]) {
-        console.error(chalk.red('\n  Invalid selection.\n'));
-        rl.close();
-        process.exit(1);
+      const raw = await askQuestion(rl, '  Select model (Enter = first): ');
+      if (!raw.trim()) {
+        selectedModel = models[0]!;
+      } else {
+        const idx = parseInt(raw.trim(), 10) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= models.length || !models[idx]) {
+          console.error(chalk.red('\n  Invalid selection.\n'));
+          rl.close();
+          process.exit(1);
+        }
+        selectedModel = models[idx]!;
       }
-      selectedModel = models[idx]!;
     } else {
       const docsUrl = DOCS[selected.id];
       if (docsUrl) {
@@ -253,11 +257,32 @@ export async function setupCommand(): Promise<void> {
           const data = await response.json() as { models?: Array<{ name: string }> };
           const available = data.models ?? [];
           if (available.length > 0) {
-            console.log(`  ${chalk.dim('Available models:')} ${available.map(m => m.name).join(', ')}`);
             console.log();
-            const raw = await askQuestion(rl, `  Select model (or press Enter for default): `);
-            if (raw.trim()) {
-              selectedModel = raw.trim();
+            available.forEach((m, i) => {
+              const prefix = i === 0 ? chalk.green('→ ') : `  `;
+              const highlight = i === 0 ? chalk.bold : (x: string) => x;
+              console.log(`${prefix}${chalk.dim(String(i + 1).padStart(3))}  ${highlight(m.name)}${i === 0 ? ' (recommended)' : ''}`);
+            });
+            console.log();
+            const raw = await askQuestion(rl, `  Select model (Enter = first): `);
+            if (!raw.trim()) {
+              selectedModel = available[0]!.name;
+            } else {
+              const idx = parseInt(raw.trim(), 10) - 1;
+              if (isNaN(idx) || idx < 0 || idx >= available.length || !available[idx]) {
+                console.error(chalk.red('\n  Invalid selection.\n'));
+                rl.close();
+                process.exit(1);
+              }
+              selectedModel = available[idx]!.name;
+            }
+          } else {
+            console.log(`\n  ${chalk.yellow('⚠ No models found.')}`);
+            selectedModel = (await askQuestion(rl, `  ${chalk.bold('Enter model name:')} `)).trim();
+            if (!selectedModel) {
+              console.error(chalk.red('\n  Model name is required.\n'));
+              rl.close();
+              process.exit(1);
             }
           }
         }
@@ -267,7 +292,9 @@ export async function setupCommand(): Promise<void> {
     } else {
       console.log(`\n  ${chalk.yellow('⚠ Ollama is not running.')}`);
       console.log(`  ${chalk.dim('Start it with:')} ${chalk.cyan('ollama serve')}`);
-      console.log(`  ${chalk.dim('Then pull a model:')} ${chalk.cyan(`ollama pull ${selectedModel}`)}`);
+      if (selectedModel) {
+        console.log(`  ${chalk.dim('Then pull a model:')} ${chalk.cyan(`ollama pull ${selectedModel}`)}`);
+      }
     }
   }
 
@@ -289,9 +316,5 @@ export async function setupCommand(): Promise<void> {
   if (apiKey) {
     console.log(`  ${chalk.bold('API Key:')} ${chalk.dim('(stored)')}`);
   }
-  if (existingAuth?.registered) {
-    console.log(`\n  ${chalk.dim('Try it now:')} ${chalk.cyan("echo 'Error: ECONNREFUSED' | drill")}\n`);
-  } else {
-    console.log(`\n  ${chalk.dim('Next:')} ${chalk.cyan('drill register')} ${chalk.dim('to activate your account, then run Drill.')}\n`);
-  }
+  console.log(`\n  ${chalk.dim('Try it now:')} ${chalk.cyan("echo 'Error: ECONNREFUSED' | drill")}\n`);
 }

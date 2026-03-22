@@ -1,34 +1,32 @@
 # How to use these files with OpenCode + MiniMax M2.5
 
+> **Current scope note:** Only Phases 1–5 are in scope for v1 (CLI-only, BYO-key).
+> Phases 6–10 are in `WorkFlow/future/` and marked accordingly. Do not build them yet.
+
 ## What you have
 
 ```
-drill-ai-files/
+drill/
   AGENTS.md              ← loaded automatically every session
-  opencode.json          ← points OpenCode at MiniMax M2.5
   package.json           ← monorepo root
   specs/
     SPEC_CLI.md          ← CLI binary contracts
-    SPEC_API.md          ← backend API contracts
     SPEC_PROMPTS.md      ← LLM prompt engineering
-    SPEC_DATABASE.md     ← Supabase schema + migrations
-    SPEC_WEB.md          ← website + frontend
-    SPEC_SDK.md          ← Node + Python SDK
-    SPEC_ACTION.md       ← GitHub Action
-    SPEC_TESTING.md      ← test strategy + fixtures
 
-drill-phases/
-  HOW_TO_USE.md          ← this file
-  PHASE_01.md            ← Monorepo scaffold + types + redact + chunk
-  PHASE_02.md            ← LLM call: stream parser + API client + prompt
-  PHASE_03.md            ← CLI binary: run command, render, full pipe flow
-  PHASE_04.md            ← CLI commands: watch, config, status, context
-  PHASE_05.md            ← Core tests: all unit tests, fixtures, CI gate
-  PHASE_06.md            ← Backend API: /api/analyze route, env validation
-  PHASE_07.md            ← Auth + database: Clerk, Supabase, migrations
-  PHASE_08.md            ← Billing: Stripe, plans, upgrade flow, rate limits
-  PHASE_09.md            ← Web: marketing site, dashboard, CLI auth page
-  PHASE_10.md            ← SDK, GitHub Action, Homebrew, npm publish, launch
+  WorkFlow/
+    current/             ← ACTIVE — Phases 1–5 (CLI v1 scope)
+      HOW_TO_USE.md      ← this file
+      PHASE_01.md        ← Monorepo scaffold + types + redact + chunk
+      PHASE_02.md        ← LLM call: stream parser + API client + prompt
+      PHASE_03.md        ← CLI binary: run command, render, full pipe flow
+      PHASE_04.md        ← CLI commands: watch, config, context
+      PHASE_05.md        ← Core tests: all unit tests, fixtures, CI gate
+    future/              ← OUT OF SCOPE — Phases 6–10 (future work)
+      PHASE_06.md        ← Backend API: managed service layer
+      PHASE_07.md        ← Auth + database: Clerk, Supabase
+      PHASE_08.md        ← Billing: Stripe, plans, rate limits
+      PHASE_09.md        ← Web: marketing site, dashboard
+      PHASE_10.md        ← SDK, GitHub Action, Homebrew, launch
 ```
 
 ---
@@ -45,9 +43,7 @@ cp -r /path/to/drill-ai-files/. .
 # 3. Copy the phases folder in too (OpenCode will reference them)
 cp -r /path/to/drill-phases/specs ./specs  # already done from above
 
-# 4. Open opencode.json and insert your MiniMax API key
-# Replace "YOUR_MINIMAX_API_KEY_HERE" with your actual key
-
+# 4. Set your MiniMax API key in environment or run `drill setup`
 # 5. Initialize pnpm workspace
 pnpm install
 
@@ -59,20 +55,16 @@ Your project root should look like:
 ```
 drill/
   AGENTS.md
-  opencode.json
   package.json
   specs/
     SPEC_CLI.md
-    SPEC_API.md
     SPEC_PROMPTS.md
-    SPEC_DATABASE.md
-    SPEC_WEB.md
-    SPEC_SDK.md
-    SPEC_ACTION.md
-    SPEC_TESTING.md
-  PHASE_01.md
-  PHASE_02.md
-  ... (all 10 phase files at root)
+  WorkFlow/
+    current/
+      HOW_TO_USE.md
+      PHASE_01.md through PHASE_05.md
+    future/
+      PHASE_06.md through PHASE_10.md
 ```
 
 ---
@@ -133,50 +125,34 @@ Tell OpenCode: `pnpm test is failing with this error: [paste error]` and let it 
 
 ## Step 4 — environment variables
 
-Before Phase 6 (backend), you need these services set up:
-
-| Service | What to do | Where to get key |
-|---|---|---|
-| MiniMax M2.5 | Already in opencode.json | api.minimax.io |
-| Together AI | Sign up at together.ai | together.ai/settings |
-| Supabase | Create project at supabase.com | Project settings → API |
-| Clerk | Create app at clerk.com | Clerk dashboard → API Keys |
-| Stripe | Create account at stripe.com | Stripe dashboard → API Keys |
-| Upstash Redis | Create DB at upstash.com | Upstash console |
-
-Create `packages/web/.env.local` with all variables from AGENTS.md before Phase 6.
-
 ---
 
 ## Phase map — what gets built when
 
-### Phases 1–5: Core validation product
+### Phases 1–5: Core CLI product (v1 — CURRENT SCOPE)
 No login. No payment. No database. No web server.
 Just: `any log | drill` → answer in terminal.
-Goal: prove the core mechanic works perfectly before building anything else.
 
 ```
 Phase 1 → The scaffold + pure logic layer (redact, chunk, types)
 Phase 2 → The LLM integration (M2.5 streaming, prompt, parser)
 Phase 3 → The CLI binary (the actual `drill` command you run)
-Phase 4 → Power CLI features (watch, context, CI mode, config)
+Phase 4 → Power CLI features (watch, config, CI mode)
 Phase 5 → Complete test suite + all fixtures passing
 ```
 
-After Phase 5: you have a working `drill` binary that calls M2.5 directly
-(using a hardcoded API key in .env) and works perfectly from any terminal.
-This is what you validate the product with.
+After Phase 5: you have a working `drill` binary that calls LLM providers directly.
+Users provide their own API key via `drill setup`. No account required.
 
-### Phases 6–10: Production layer
-Auth, billing, web, SDK, distribution.
-Built on top of a proven core.
+### Phases 6–10: Future scope (NOT being built yet)
+Stored in `WorkFlow/future/` with scope markers. These will be built after v1 ships.
 
 ```
-Phase 6 → Backend API route (the managed service layer)
+Phase 6 → Backend API route (managed service layer)
 Phase 7 → Auth + database (Clerk + Supabase)
 Phase 8 → Billing (Stripe, plans, rate limits, upgrade flow)
-Phase 9 → Web (marketing site, dashboard, CLI auth)
-Phase 10 → SDK, GitHub Action, Homebrew, npm publish, launch
+Phase 9 → Web (marketing site, dashboard)
+Phase 10 → SDK, GitHub Action, Homebrew, launch
 ```
 
 ---
@@ -213,3 +189,6 @@ It reads the relevant SPEC files on its own when it hits domain work.
 
 **"M2.5 is not returning JSON"**
 → The retry logic in SPEC_PROMPTS.md handles this. Say: `Implement the parse retry logic from specs/SPEC_PROMPTS.md section "Retry logic for parse failures".`
+
+**"Should I build Phase 6+?"**
+→ No. Phases 6–10 are in `WorkFlow/future/`. Only build Phases 1–5 for now.

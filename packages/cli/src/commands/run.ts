@@ -6,7 +6,6 @@ import {
   showThinking, showResult,
   showInputInfo, showRedactStats,
 } from '../lib/render.js';
-import { checkAndCount } from '../lib/identity.js';
 import { getApiKey, loadAuth } from '../lib/auth.js';
 import type { DrillError } from '../types.js';
 
@@ -44,32 +43,12 @@ export async function runCommand(
   }
 
   const apiKey = getApiKey();
+  const auth = loadAuth();
 
-  if (!apiKey) {
-    console.error(chalk.yellow('\n  No API key configured. Run: drill setup\n'));
+  if (!apiKey && !options.local) {
+    console.error(chalk.yellow('\n  No LLM provider configured.'));
+    console.error(chalk.dim('  Run: ') + chalk.cyan('drill setup') + chalk.dim(' to configure your provider.\n'));
     process.exit(1);
-  }
-
-  const check = await checkAndCount(apiKey);
-
-  if (!check.registered) {
-    console.error(chalk.yellow('\n  Not registered. Run: drill register\n'));
-    process.exit(1);
-  }
-
-  if (!check.allowed) {
-    console.error(
-      '\n  ' + chalk.hex('#EF5350')('✕ ') +
-      chalk.hex('#E6EDF3')(`Weekly limit reached (${check.runsWeek}/${check.limit})`) +
-      '\n'
-    );
-    process.exit(2);
-  }
-
-  if (check.runsWeek / check.limit >= 0.9 && check.limit < 999999) {
-    console.log(chalk.hex('#FF9800')(
-      `  ${check.runsWeek}/${check.limit} analyses used this week\n`
-    ));
   }
 
   let rawInput: string;
@@ -158,8 +137,7 @@ export async function runCommand(
 
   let thinkingStarted = false;
   const timeoutMs = parseTimeoutMs(options.timeout);
-  const auth = loadAuth();
-  const localModel = options.local ? (options.model ?? auth?.localModel ?? 'llama3.2') : undefined;
+  const localModel = options.local ? (options.model ?? auth?.localModel ?? undefined) : undefined;
 
   const analyzeOptions: Parameters<typeof analyze>[0] = {
     input: finalInput,
@@ -179,9 +157,11 @@ export async function runCommand(
     analyzeOptions.context = contextBlock;
   }
 
-  if (options.local && localModel) {
+  if (options.local) {
     analyzeOptions.providerOverride = 'ollama';
-    analyzeOptions.providerModelOverride = localModel;
+    if (localModel) {
+      analyzeOptions.providerModelOverride = localModel;
+    }
   }
 
   const result = await analyze(analyzeOptions);
@@ -206,7 +186,9 @@ export async function runCommand(
     showResult(result);
   }
 
-  if (options.ci && result.confidence >= 50) {
-    process.exit(1);
+  if (options.ci) {
+    if (result.severity === 'critical' || result.severity === 'high') {
+      process.exit(1);
+    }
   }
 }

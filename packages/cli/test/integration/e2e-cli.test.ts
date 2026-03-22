@@ -78,12 +78,6 @@ describe('E2E CLI binary', () => {
       expect(result.status).toBe(0);
     });
 
-    it('shows login help', () => {
-      const result = runCli(['login', '--help']);
-      expect(result.stdout).toContain('Alias for drill register');
-      expect(result.status).toBe(0);
-    });
-
     it('shows config help with subcommands', () => {
       const result = runCli(['config', '--help']);
       expect(result.stdout).toContain('list');
@@ -91,20 +85,14 @@ describe('E2E CLI binary', () => {
       expect(result.stdout).toContain('set');
       expect(result.status).toBe(0);
     });
-
-    it('shows status help', () => {
-      const result = runCli(['status', '--help']);
-      expect(result.stdout).toContain('status');
-      expect(result.status).toBe(0);
-    });
   });
 
   describe('error handling', () => {
-    it('exits 1 with clear message when not logged in', () => {
+    it('exits 1 with clear message when no provider configured', () => {
       const result = runCli(['test error']);
       expect(result.status).toBe(1);
       const output = result.stderr + result.stdout;
-      expect(output).toContain('No API key configured');
+      expect(output).toContain('No LLM provider configured');
     });
 
     it('exits 1 for empty stdin when not a TTY', () => {
@@ -200,23 +188,10 @@ describe('E2E CLI binary', () => {
       expect(result.stdout).toContain('Configuration');
     });
 
-    it('config get plan works', () => {
-      const result = runCli(['config', 'get', 'plan']);
-      expect(result.status).toBe(0);
-    });
-
     it('config set fails with clear message for apiKey', () => {
       const result = runCli(['config', 'set', 'apiKey', 'secret']);
       expect(result.status).toBe(1);
       expect(result.stdout + result.stderr).toContain('cannot set apiKey directly');
-    });
-  });
-
-  describe('status command', () => {
-    it('shows not logged in when not authenticated', () => {
-      const result = runCli(['status']);
-      expect(result.status).toBe(0);
-      expect(result.stdout).toContain('Not registered');
     });
   });
 

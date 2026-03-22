@@ -1,3 +1,5 @@
+## 🚧 FUTURE SCOPE — Phase 9
+
 # Phase 9 — Web: marketing site, dashboard, CLI auth page
 
 ## What this phase builds

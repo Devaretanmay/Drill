@@ -56,7 +56,7 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   const apiKey = getApiKey();
   const auth = loadAuth();
   const timeoutMs = parseTimeoutMs(options.timeout);
-  const localModel = options.local ? (options.model ?? auth?.localModel ?? 'llama3.2') : undefined;
+  const localModel = options.local ? (options.model ?? auth?.localModel ?? undefined) : undefined;
 
   if (options.model && !options.local) {
     console.error('\n  --model can only be used together with --local.\n');
@@ -65,7 +65,7 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
 
   if (!options.local && !apiKey) {
     console.error(`\n  ${chalk.red('✕')} No API key configured.\n`);
-    console.error('  Run "drill login" or set DRILL_API_KEY to use drill --watch.\n');
+    console.error('  Run "drill setup" to configure your provider.\n');
     process.exit(1);
   }
 

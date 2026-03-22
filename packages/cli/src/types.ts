@@ -59,11 +59,6 @@ export interface DrillConfig {
   provider: ProviderName;
   providerModel: string;
   customUrl: string | undefined;
-  registered?: boolean;
-  email?: string;
-  runsWeek?: number;
-  weekLimit?: number;
-  weekReset?: string;
 }
 
 export interface StreamEvent {

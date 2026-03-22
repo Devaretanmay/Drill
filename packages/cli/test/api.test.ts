@@ -22,7 +22,7 @@ vi.mock('../src/lib/providers', async (importOriginal) => {
   return {
     ...mod,
     getAdapter: (config: Parameters<typeof mod.getAdapter>[0]) => mod.getAdapter(config),
-    getProviderApiKey: vi.fn() as ReturnType<typeof mod.getProviderApiKey>,
+    getProviderApiKey: vi.fn() as unknown as ReturnType<typeof mod.getProviderApiKey>,
     getProviderEnvVar: vi.fn().mockImplementation((provider: string) => {
       const map: Record<string, string> = {
         openai: 'OPENAI_API_KEY',
@@ -44,13 +44,9 @@ const server = setupServer();
 
 const defaultAuth = {
   apiKey: 'test-key',
-  apiUrl: 'https://api.drill.dev',
-  plan: 'free' as const,
-  runCount: 0,
-  runLimit: 20,
+  apiUrl: 'https://api.minimax.io/v1',
   provider: 'minimax' as const,
   providerModel: 'MiniMax-M2.5' as const,
-  model: 'cloud' as const,
   localModel: undefined as string | undefined,
   redact: true,
   customUrl: undefined as string | undefined,

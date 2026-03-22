@@ -1,3 +1,5 @@
+## 🚧 FUTURE SCOPE — Phase 10
+
 # Phase 10 — SDK, GitHub Action, Homebrew, release pipeline, launch
 
 ## What this phase builds

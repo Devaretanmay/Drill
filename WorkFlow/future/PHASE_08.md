@@ -1,3 +1,5 @@
+## 🚧 FUTURE SCOPE — Phase 8
+
 # Phase 8 — Billing: Stripe, plans, upgrade flow, rate limits
 
 ## What this phase builds

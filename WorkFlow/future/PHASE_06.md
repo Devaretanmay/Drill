@@ -1,3 +1,8 @@
+## 🚧 FUTURE SCOPE — Phase 6
+
+> **Not in v1 scope.** This phase describes future work that is out of scope
+> for the initial CLI launch. Kept here for planning reference only.
+
 # Phase 6 — Backend API: managed service layer
 
 ## What this phase builds

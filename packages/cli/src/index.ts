@@ -1,13 +1,9 @@
 import { Command } from 'commander';
 import { runCommand } from './commands/run.js';
-import { registerCommand } from './commands/register.js';
-import { loginCommand } from './commands/login.js';
 import { logoutCommand } from './commands/logout.js';
-import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
 import { watchCommand } from './commands/watch.js';
 import { setupCommand } from './commands/setup.js';
-import { openUpgradePage } from './lib/upgrade.js';
 import type { WatchOptions } from './commands/watch.js';
 
 declare const __VERSION__: string;
@@ -24,9 +20,9 @@ program
   .option('--lines <n>', 'Analyze only the last N lines of input')
   .option('--context <dir>', 'Add source code context from directory')
   .option('--json', 'Output raw JSON result to stdout (status messages to stderr)')
-  .option('--ci', 'CI mode: exit code 1 if cause found with confidence >= 50%')
+  .option('--ci', 'CI mode: exit code 1 if cause is critical or high severity')
   .option('--local', 'Use local Ollama model (nothing sent to API)')
-  .option('--model <name>', 'Local model name when using --local (default: llama3.2)')
+  .option('--model <name>', 'Local model name when using --local')
   .option('--verbose', 'Show redaction stats, timing, and debug info')
   .option('--timeout <seconds>', 'Request timeout in seconds (default: 90)')
   .option('--watch <file>', 'Watch a file for errors and auto-analyze')
@@ -46,38 +42,10 @@ program
   });
 
 program
-  .command('register')
-  .description('Create your free Drill account')
-  .action(async () => {
-    await registerCommand();
-  });
-
-program
-  .command('login')
-  .description('Alias for drill register')
-  .action(async () => {
-    await loginCommand();
-  });
-
-program
   .command('logout')
   .description('Clear your stored configuration')
   .action(async () => {
     await logoutCommand();
-  });
-
-program
-  .command('status')
-  .description('Show current plan, run count, and usage')
-  .action(async () => {
-    await statusCommand();
-  });
-
-program
-  .command('upgrade')
-  .description('Upgrade your plan to unlock more analyses')
-  .action(async () => {
-    await openUpgradePage();
   });
 
 const configCmd = program

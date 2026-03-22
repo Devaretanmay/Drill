@@ -2,7 +2,7 @@
  * Authentication & Config Module
  *
  * Manages API key storage and retrieval.
- * Precedence: 1) ~/.drill/config (from drill register) → 2) DRILL_API_KEY env var → 3) empty
+ * Precedence: 1) ~/.drill/config (from drill setup) → 2) DRILL_API_KEY env var → 3) empty
  */
 
 import Conf from 'conf';
@@ -12,21 +12,11 @@ import type { ProviderName } from '../types.js';
 export interface DrillAuthData {
   apiKey: string;
   apiUrl: string;
-  plan: string;
-  runCount: number;
-  runLimit: number;
   provider: ProviderName;
-  providerModel: string;
-  model: 'cloud' | 'local';
+  providerModel: string | undefined;
   localModel: string | undefined;
-  redact: boolean;
   customUrl: string | undefined;
-  // Registration fields
-  email?: string;
-  registered?: boolean;
-  weekLimit?: number;
-  runsWeek?: number;
-  weekReset?: string;
+  redact: boolean;
 }
 
 interface DrillConfSchema {
@@ -53,33 +43,25 @@ export function loadAuth(): DrillAuthData | null {
   if (!auth.provider) {
     auth.provider = 'minimax';
     auth.providerModel = 'MiniMax-M2.5';
-    auth.model = 'cloud';
+    auth.redact = true;
+  } else if (auth.redact === undefined) {
     auth.redact = true;
   }
 
   return auth;
 }
 
-export function saveAuth(data: Partial<DrillAuthData> & { email: string; registered: boolean; plan: string; weekLimit: number }): void {
+export function saveAuth(data: Partial<DrillAuthData> & { apiUrl: string }): void {
   const store = getConfigStore();
   const existing = loadAuth();
   const merged = {
-    apiKey:        existing?.apiKey        ?? data.apiKey        ?? '',
-    apiUrl:        existing?.apiUrl        ?? data.apiUrl        ?? 'https://api.drill.dev',
-    plan:          data.plan          ?? existing?.plan          ?? 'free',
-    runCount:      existing?.runCount      ?? data.runCount      ?? 0,
-    runLimit:      existing?.runLimit      ?? data.runLimit      ?? 20,
-    model:         existing?.model         ?? data.model         ?? 'cloud',
-    localModel:    existing?.localModel    ?? data.localModel,
-    redact:        existing?.redact        ?? data.redact        ?? true,
-    provider:      existing?.provider      ?? data.provider      ?? 'minimax',
-    providerModel: existing?.providerModel ?? data.providerModel ?? 'MiniMax-M2.5',
-    customUrl:     existing?.customUrl     ?? data.customUrl,
-    email:         data.email,
-    registered:    data.registered,
-    weekLimit:     data.weekLimit,
-    runsWeek:      data.runsWeek ?? 0,
-    weekReset:     data.weekReset,
+    apiKey:        data.apiKey        ?? existing?.apiKey        ?? '',
+    apiUrl:        data.apiUrl        ?? existing?.apiUrl        ?? 'https://api.minimax.io/v1',
+    provider:      data.provider      ?? existing?.provider      ?? 'minimax',
+    providerModel: data.providerModel ?? existing?.providerModel ?? 'MiniMax-M2.5',
+    localModel:    data.localModel    ?? existing?.localModel,
+    redact:        data.redact        ?? existing?.redact        ?? true,
+    customUrl:     data.customUrl     ?? existing?.customUrl,
   } as DrillAuthData;
   store.set('auth', merged);
 }
@@ -90,26 +72,18 @@ export function updateAuth(partial: {
   apiKey?: string;
   customUrl?: string;
   localModel?: string;
+  apiUrl?: string;
 }): void {
   const store = getConfigStore();
   const existing = loadAuth() ?? {} as DrillAuthData;
   const merged = {
     apiKey:        partial.apiKey ?? existing.apiKey ?? '',
-    apiUrl:        existing.apiUrl ?? 'https://api.drill.dev',
-    plan:          existing.plan ?? 'free',
-    runCount:      existing.runCount ?? 0,
-    runLimit:      existing.runLimit ?? 20,
-    model:         existing.model ?? 'cloud',
-    localModel:    partial.localModel ?? existing.localModel,
-    redact:        existing.redact ?? true,
+    apiUrl:        partial.apiUrl ?? existing.apiUrl ?? 'https://api.minimax.io/v1',
     provider:      partial.provider ?? existing.provider ?? 'minimax',
     providerModel: partial.providerModel ?? existing.providerModel ?? 'MiniMax-M2.5',
+    localModel:    partial.localModel ?? existing.localModel,
+    redact:        existing.redact ?? true,
     customUrl:     partial.customUrl !== undefined ? (partial.customUrl || undefined) : existing.customUrl,
-    email:         existing.email,
-    registered:    existing.registered,
-    weekLimit:     existing.weekLimit,
-    runsWeek:      existing.runsWeek,
-    weekReset:     existing.weekReset,
   } as DrillAuthData;
   store.set('auth', merged);
 }
@@ -137,7 +111,7 @@ export function hasStoredAuth(): boolean {
 export function getApiUrl(): string {
   const auth = loadAuth();
   if (auth?.apiUrl) return auth.apiUrl;
-  return process.env['DRILL_API_URL'] ?? 'https://api.drill.dev';
+  return process.env['DRILL_API_URL'] ?? 'https://api.minimax.io/v1';
 }
 
 export function getProvider(): ProviderName {

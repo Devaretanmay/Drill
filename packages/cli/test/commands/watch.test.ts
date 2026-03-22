@@ -4,22 +4,12 @@ import { preprocess } from '../../src/lib/preprocess';
 vi.mock('../../src/lib/auth', () => ({
   loadAuth: vi.fn().mockReturnValue({
     apiKey: 'test-key',
-    apiUrl: 'https://api.drill.dev',
-    plan: 'free',
-    runCount: 0,
-    runLimit: 20,
+    apiUrl: 'https://api.minimax.io/v1',
     provider: 'minimax',
     providerModel: 'MiniMax-M2.5',
-    model: 'cloud',
     localModel: undefined,
     redact: true,
     customUrl: undefined,
-    supabaseToken: 'test-token',
-    supabaseUserId: 'test-user-id',
-    email: 'test@example.com',
-    runsWeek: 5,
-    weekLimit: 100,
-    weekReset: '2029-01-01',
   }),
   getApiKey: vi.fn().mockReturnValue('test-key'),
 }));

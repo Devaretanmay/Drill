@@ -1,3 +1,5 @@
+## 🚧 FUTURE SCOPE — Phase 7
+
 # Phase 7 — Auth + database: Clerk, Supabase, CLI login flow
 
 ## What this phase builds

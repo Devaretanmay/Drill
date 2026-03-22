@@ -23,13 +23,13 @@ The CLI calls LLM providers directly via the adapter pattern in `providers.ts`. 
 ```
 drill/
   packages/
-    cli/          # drill-cli npm package (CURRENT SCOPE)
+    cli/          # drill-log npm package (CURRENT SCOPE)
     # sdk, web, action — FUTURE SCOPE (see WorkFlow/future/)
   specs/
     SPEC_CLI.md
   WorkFlow/
     current/      # Active phases (1-5)
-    future/       # Future phases (6-10)
+    future/      # Future phases (6-10)
   AGENTS.md       # This file
 ```
 
@@ -54,7 +54,7 @@ drill/
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` |
 | Groq | `GROQ_API_KEY` | `llama-3.1-70b-versatile` |
 | Mistral | `MISTRAL_API_KEY` | `mistral-large` |
-| Ollama | (none — local) | `llama3.2` |
+| Ollama | (none — local) | any |
 | Together AI | `TOGETHER_API_KEY` | `MiniMaxAI/MiniMax-M2.5` |
 | Custom | `CUSTOM_API_KEY` | any |
 

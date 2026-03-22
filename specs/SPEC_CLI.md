@@ -4,7 +4,7 @@
 
 ```json
 {
-  "name": "drill-cli",
+  "name": "drill-log",
   "version": "1.0.0",
   "bin": { "drill": "./dist/index.js" },
   "engines": { "node": ">=18.0.0" }
@@ -269,19 +269,6 @@ export async function parseStream(
 // 5. Include top 5 files by score, truncated to first 100 lines each
 // 6. Format as context block appended to LLM prompt
 // Max total context: 50k chars — truncate lowest-scored files first
-```
-
-## login.ts — auth flow spec
-
-```typescript
-// drill login
-// 1. Generate a random state token (crypto.randomUUID())
-// 2. Open browser: https://drill.dev/cli-auth?state={token}&device={hostname}
-// 3. Poll GET /api/cli-auth/poll?state={token} every 2 seconds for up to 5 minutes
-// 4. Response: { status: 'pending' | 'complete', apiKey?: string, plan?: string }
-// 5. On complete: save to ~/.drill/config via `conf`
-//    { apiKey, apiUrl: 'https://drill.dev', plan, runCount: 0, runLimit: 20 }
-// 6. Show: "Authenticated as {email}. Plan: {plan}. {runLimit} runs/month."
 ```
 
 ## Anonymous mode (3 runs, no account)

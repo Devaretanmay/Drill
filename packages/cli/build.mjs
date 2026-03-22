@@ -11,7 +11,7 @@ await build({
   format: 'esm',
   outfile: 'dist/index.js',
   banner: {
-    js: `#!/usr/bin/env node\n// drill-cli ${pkg.version}`,
+    js: `#!/usr/bin/env node\n// drill ${pkg.version}`,
   },
   define: {
     __VERSION__: JSON.stringify(pkg.version),

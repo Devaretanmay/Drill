@@ -1,8 +1,8 @@
 {
   "name": "drill-log",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
-  "description": "AI-powered log diagnosis CLI",
+  "description": "AI-powered log diagnosis CLI — severity triage, severity exit codes, git diff context, PII redaction, streaming output",
   "bin": {
     "drill": "./dist/index.js"
   },
